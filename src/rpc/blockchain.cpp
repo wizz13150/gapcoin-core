@@ -1,41 +1,53 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <rpc/blockchain.h>
 
 #include <amount.h>
+#include <base58.h>
+#include <bignum.h>
 #include <chain.h>
 #include <chainparams.h>
 #include <checkpoints.h>
 #include <coins.h>
 #include <consensus/validation.h>
-#include <validation.h>
 #include <core_io.h>
+#include <hash.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
+#include <pow.h>
 #include <primitives/transaction.h>
 #include <rpc/server.h>
+#ifdef ENABLE_WALLET
+#include <wallet/rpcwallet.h>
+#endif
+#include <stdint.h>
 #include <streams.h>
 #include <sync.h>
 #include <txdb.h>
 #include <txmempool.h>
 #include <util.h>
 #include <utilstrencodings.h>
-#include <hash.h>
+#include <validation.h>
 #include <validationinterface.h>
+#ifdef ENABLE_WALLET
+#include <wallet/wallet.h>
+#include <wallet/walletdb.h>
+#endif
 #include <warnings.h>
 
-#include <stdint.h>
+#include <boost/thread/thread.hpp> // boost::thread::interrupt
 
 #include <univalue.h>
-
-#include <boost/thread/thread.hpp> // boost::thread::interrupt
 
 #include <memory>
 #include <mutex>
 #include <condition_variable>
+
+static PoWUtils *powUtils = new PoWUtils();
 
 struct CUpdatedBlock
 {
@@ -57,27 +69,12 @@ double GetDifficulty(const CChain& chain, const CBlockIndex* blockindex)
     if (blockindex == nullptr)
     {
         if (chain.Tip() == nullptr)
-            return 1.0;
+            return powUtils->get_readable_difficulty(TestNet() ? PoWUtils::min_test_difficulty : PoWUtils::min_difficulty);
         else
             blockindex = chain.Tip();
     }
 
-    int nShift = (blockindex->nBits >> 24) & 0xff;
-    double dDiff =
-        (double)0x0000ffff / (double)(blockindex->nBits & 0x00ffffff);
-
-    while (nShift < 29)
-    {
-        dDiff *= 256.0;
-        nShift++;
-    }
-    while (nShift > 29)
-    {
-        dDiff /= 256.0;
-        nShift--;
-    }
-
-    return dDiff;
+    return powUtils->get_readable_difficulty(blockindex->nDifficulty);
 }
 
 double GetDifficulty(const CBlockIndex* blockindex)
@@ -85,9 +82,31 @@ double GetDifficulty(const CBlockIndex* blockindex)
     return GetDifficulty(chainActive, blockindex);
 }
 
+static PoWUtils *utils = new PoWUtils();
+
 UniValue blockheaderToJSON(const CBlockIndex* blockindex)
 {
     AssertLockHeld(cs_main);
+    CBlockHeader block = blockindex->GetBlockHeader();
+    uint256 hash = block.GetHash();
+    std::vector<uint8_t> vHash(hash.begin(), hash.end());
+    PoW pow(&vHash, block.nShift, &block.nAdd, block.nDifficulty);
+
+    std::vector<uint8_t> vStart, vEnd;
+    pow.get_gap(&vStart, &vEnd);
+
+    std::vector<uint8_t> vDifficulty(block.nAdd.begin(), block.nAdd.end());
+
+    // insert 0 a the begining to avoid sig problems
+    vDifficulty.push_back(0);
+    vStart.push_back(0);
+    vEnd.push_back(0);
+
+    CBigNum bnTarget, bnStart, bnEnd;
+    bnTarget.setvch(vDifficulty);
+    bnStart.setvch(vStart);
+    bnEnd.setvch(vEnd);
+
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("hash", blockindex->GetBlockHash().GetHex()));
     int confirmations = -1;
@@ -102,8 +121,13 @@ UniValue blockheaderToJSON(const CBlockIndex* blockindex)
     result.push_back(Pair("time", (int64_t)blockindex->nTime));
     result.push_back(Pair("mediantime", (int64_t)blockindex->GetMedianTimePast()));
     result.push_back(Pair("nonce", (uint64_t)blockindex->nNonce));
-    result.push_back(Pair("bits", strprintf("%08x", blockindex->nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
+    result.push_back(Pair("shift", (uint64_t)block.nShift));
+    result.push_back(Pair("adder", bnTarget.ToString()));
+    result.push_back(Pair("gapstart", bnStart.ToString()));
+    result.push_back(Pair("gapend", bnEnd.ToString()));
+    result.push_back(Pair("gaplen", pow.gap_len()));
+    result.push_back(Pair("merit", utils->get_readable_difficulty(pow.merit())));
     result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
     result.push_back(Pair("nTx", (uint64_t)blockindex->nTx));
 
@@ -118,6 +142,25 @@ UniValue blockheaderToJSON(const CBlockIndex* blockindex)
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails)
 {
     AssertLockHeld(cs_main);
+    uint256 hash = block.GetHash();
+    std::vector<uint8_t> vHash(hash.begin(), hash.end());
+    PoW pow(&vHash, block.nShift, &block.nAdd, block.nDifficulty);
+
+    std::vector<uint8_t> vStart, vEnd;
+    pow.get_gap(&vStart, &vEnd);
+
+    std::vector<uint8_t> vDifficulty(block.nAdd.begin(), block.nAdd.end());
+
+    // insert 0 a the begining to avoid sig problems
+    vDifficulty.push_back(0);
+    vStart.push_back(0);
+    vEnd.push_back(0);
+
+    CBigNum bnTarget, bnStart, bnEnd;
+    bnTarget.setvch(vDifficulty);
+    bnStart.setvch(vStart);
+    bnEnd.setvch(vEnd);
+
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("hash", blockindex->GetBlockHash().GetHex()));
     int confirmations = -1;
@@ -148,8 +191,13 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.push_back(Pair("time", block.GetBlockTime()));
     result.push_back(Pair("mediantime", (int64_t)blockindex->GetMedianTimePast()));
     result.push_back(Pair("nonce", (uint64_t)block.nNonce));
-    result.push_back(Pair("bits", strprintf("%08x", block.nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
+    result.push_back(Pair("shift", (uint64_t)block.nShift));
+    result.push_back(Pair("adder", bnTarget.ToString()));
+    result.push_back(Pair("gapstart", bnStart.ToString()));
+    result.push_back(Pair("gapend", bnEnd.ToString()));
+    result.push_back(Pair("gaplen", pow.gap_len()));
+    result.push_back(Pair("merit", utils->get_readable_difficulty(pow.merit())));
     result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
     result.push_back(Pair("nTx", (uint64_t)blockindex->nTx));
 
@@ -678,8 +726,13 @@ UniValue getblockheader(const JSONRPCRequest& request)
             "  \"time\" : ttt,          (numeric) The block time in seconds since epoch (Jan 1 1970 GMT)\n"
             "  \"mediantime\" : ttt,    (numeric) The median block time in seconds since epoch (Jan 1 1970 GMT)\n"
             "  \"nonce\" : n,           (numeric) The nonce\n"
-            "  \"bits\" : \"1d00ffff\", (string) The bits\n"
             "  \"difficulty\" : x.xxx,  (numeric) The difficulty\n"
+            "  \"shift\" : x.xxx,  (numeric) The shift\n"
+            "  \"adder\" : x.xxx,  (numeric) The adder\n"
+            "  \"gapstart\" : x.xxx,  (numeric) The prime at the start of the gap\n"
+            "  \"gapend\" : x.xxx,  (numeric) The prime at the end of the gap\n"
+            "  \"gaplen\" : x.xxx,  (numeric) The gap length\n"
+            "  \"merit\" : x.xxx,  (numeric) The merit of the gap\n"
             "  \"chainwork\" : \"0000...1f3\"     (string) Expected number of hashes required to produce the current chain (in hex)\n"
             "  \"nTx\" : n,             (numeric) The number of transactions in the block.\n"
             "  \"previousblockhash\" : \"hash\",  (string) The hash of the previous block\n"
@@ -748,8 +801,13 @@ UniValue getblock(const JSONRPCRequest& request)
             "  \"time\" : ttt,          (numeric) The block time in seconds since epoch (Jan 1 1970 GMT)\n"
             "  \"mediantime\" : ttt,    (numeric) The median block time in seconds since epoch (Jan 1 1970 GMT)\n"
             "  \"nonce\" : n,           (numeric) The nonce\n"
-            "  \"bits\" : \"1d00ffff\", (string) The bits\n"
             "  \"difficulty\" : x.xxx,  (numeric) The difficulty\n"
+            "  \"shift\" : x.xxx,  (numeric) The shift\n"
+            "  \"adder\" : x.xxx,  (numeric) The adder\n"
+            "  \"gapstart\" : x.xxx,  (numeric) The prime at the start of the gap\n"
+            "  \"gapend\" : x.xxx,  (numeric) The prime at the end of the gap\n"
+            "  \"gaplen\" : x.xxx,  (numeric) The gap length\n"
+            "  \"merit\" : x.xxx,  (numeric) The merit of the gap\n"
             "  \"chainwork\" : \"xxxx\",  (string) Expected number of hashes required to produce the chain up to this block (in hex)\n"
             "  \"nTx\" : n,             (numeric) The number of transactions in the block.\n"
             "  \"previousblockhash\" : \"hash\",  (string) The hash of the previous block\n"
@@ -1618,6 +1676,487 @@ UniValue savemempool(const JSONRPCRequest& request)
     return NullUniValue;
 }
 
+// returns all prime gaps with the given merit if they exist
+UniValue listprimerecords(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 1)
+        throw runtime_error(
+            "listprimerecords merit\n"
+            "\nReturns a list of all prime gaps with the given integer merit.\n"
+            "\nArguments:\n"
+            "1. merit        (numeric 1,2,3..) the prime gap merit.\n");
+
+#ifdef ENABLE_WALLET
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : nullptr);
+#else
+    LOCK(cs_main);
+#endif
+
+    uint64_t nMerit  = request.params[0].get_int();
+
+    UniValue ret(UniValue::VARR);
+    CTxDestination address;
+
+    for (CBlockIndex* pindex = chainActive.Tip(); pindex; pindex = pindex->pprev)
+    {
+
+        uint256 hash = pindex->GetBlockHash();
+        std::vector<uint8_t> vHash(hash.begin(), hash.end());
+        PoW pow(&vHash, pindex->nShift, &pindex->nAdd, pindex->nDifficulty);
+
+        uint64_t curMerit = pow.merit();
+
+        if (nMerit != (curMerit >> 48))
+            continue;
+
+        std::vector<uint8_t> vStart, vEnd;
+        pow.get_gap(&vStart, &vEnd);
+        
+        std::vector<uint8_t> vDifficulty(pindex->nAdd.begin(), pindex->nAdd.end());
+        
+        // insert 0 a the begining to avoid sig problems
+        vDifficulty.push_back(0);
+        vStart.push_back(0);
+        vEnd.push_back(0);
+        
+        CBigNum bnTarget, bnStart, bnEnd;
+        bnTarget.setvch(vDifficulty);
+        bnStart.setvch(vStart);
+        bnEnd.setvch(vEnd);
+
+        CBlock block;
+        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+
+            UniValue entry(UniValue::VOBJ);
+
+            entry.push_back(Pair("time", DateTimeStrFormat("%Y-%m-%d %H:%M:%S UTC", pindex->GetBlockTime()).c_str()));
+            entry.push_back(Pair("epoch", (boost::int64_t) pindex->GetBlockTime()));
+            entry.push_back(Pair("height", pindex->nHeight));
+#ifdef ENABLE_WALLET
+            entry.push_back(Pair("mineraddress", (block.vtx[0]->vout.size() > 1)? "multiple" : ExtractDestination(block.vtx[0]->vout[0].scriptPubKey, address)? EncodeDestination(address).c_str() : "invalid"));
+            entry.push_back(Pair("ismine", bool(pwallet->IsMine(block.vtx[0]->vout[0]) & ISMINE_SPENDABLE)));
+            entry.push_back(Pair("iswatchonly", bool(pwallet->IsMine(block.vtx[0]->vout[0]) & ISMINE_WATCH_ONLY)));
+#endif
+            entry.push_back(Pair("gapstart", bnStart.ToString()));
+            entry.push_back(Pair("gapend", bnEnd.ToString()));
+            entry.push_back(Pair("gaplen", pow.gap_len()));
+            entry.push_back(Pair("merit", utils->get_readable_difficulty(curMerit)));
+            ret.push_back(entry);
+        }
+    }
+
+    return ret;
+}
+
+struct PrimeRecord {
+  
+    uint64_t nMerit;
+    UniValue nObj;
+
+    PrimeRecord(uint64_t m, UniValue o) : nMerit(m), nObj(o) { }
+
+    bool operator < (const PrimeRecord& rec) const
+    {
+        return (nMerit < rec.nMerit);
+    }
+};
+
+// returns the best prime gaps
+
+UniValue listbestprimes(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 2)
+        throw runtime_error(
+            "listbestprimes amount (min merit)\n"
+            "\nReturns a sorted list of the best prime gaps merits.\n"
+            "\nArguments:\n"
+            "1. amount        (numeric). number of prime gaps to display\n"
+            "2. merit         (numeric, default = 16). minimum merit to display\n");
+
+    uint64_t amount = request.params[0].get_int();
+    uint64_t nMerit = 16;
+
+    if (request.params.size() > 1)
+      nMerit = request.params[1].get_int();
+
+#ifdef ENABLE_WALLET
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : nullptr);
+#else
+    LOCK(cs_main);
+#endif
+
+    std::vector<PrimeRecord> records;
+    CTxDestination address;
+
+    for (CBlockIndex* pindex = chainActive.Tip(); pindex; pindex = pindex->pprev)
+    {
+
+        uint256 hash = pindex->GetBlockHash();
+        std::vector<uint8_t> vHash(hash.begin(), hash.end());
+        PoW pow(&vHash, pindex->nShift, &pindex->nAdd, pindex->nDifficulty);
+
+        uint64_t curMerit = pow.merit();
+
+        if (nMerit > (curMerit >> 48))
+            continue;
+
+        std::vector<uint8_t> vStart, vEnd;
+        pow.get_gap(&vStart, &vEnd);
+        
+        std::vector<uint8_t> vDifficulty(pindex->nAdd.begin(), pindex->nAdd.end());
+        
+        // insert 0 a the begining to avoid sig problems
+        vDifficulty.push_back(0);
+        vStart.push_back(0);
+        vEnd.push_back(0);
+        
+        CBigNum bnTarget, bnStart, bnEnd;
+        bnTarget.setvch(vDifficulty);
+        bnStart.setvch(vStart);
+        bnEnd.setvch(vEnd);
+
+        CBlock block;
+        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+
+            UniValue entry(UniValue::VOBJ);
+            entry.push_back(Pair("time", DateTimeStrFormat("%Y-%m-%d %H:%M:%S UTC", pindex->GetBlockTime()).c_str()));
+            entry.push_back(Pair("epoch", (boost::int64_t) pindex->GetBlockTime()));
+            entry.push_back(Pair("height", pindex->nHeight));
+#ifdef ENABLE_WALLET
+            entry.push_back(Pair("ismine", bool(pwallet->IsMine(block.vtx[0]->vout[0]) & ISMINE_SPENDABLE)));
+            entry.push_back(Pair("iswatchonly", bool(pwallet->IsMine(block.vtx[0]->vout[0]) & ISMINE_WATCH_ONLY)));
+            entry.push_back(Pair("mineraddress", (block.vtx[0]->vout.size() > 1)? "multiple" : ExtractDestination(block.vtx[0]->vout[0].scriptPubKey, address)? EncodeDestination(address).c_str() : "invalid"));
+#endif
+            entry.push_back(Pair("primedigits", std::to_string(bnStart.ToString().length())));
+            entry.push_back(Pair("gapstart", bnStart.ToString()));
+            entry.push_back(Pair("gapend", bnEnd.ToString()));
+            entry.push_back(Pair("gaplen", pow.gap_len()));
+            entry.push_back(Pair("merit", utils->get_readable_difficulty(curMerit)));
+
+            PrimeRecord rec(curMerit, entry);
+            records.push_back(rec);
+        }
+    }
+
+    std::sort(records.begin(), records.end());
+
+    UniValue ret(UniValue::VARR);
+
+    for (uint32_t i = (records.size() > (1 + amount)) ? records.size() - (1 + amount) : 0; i < records.size(); i++)
+    {
+      ret.push_back(records[i].nObj);
+    }
+
+    return ret;
+}
+
+static std::string blockgraph(const CBlockIndex* pblockindex)
+{
+
+    bool withTypes = false;
+
+    std::map<std::string,std::string> blockkeys = {
+        std::make_pair("adder", "integer"),
+        std::make_pair("difficulty", "decimal"),
+        std::make_pair("gaplen", "integer"),
+        std::make_pair("gapstart", "string"),
+        std::make_pair("height", "integer"),
+        std::make_pair("mediantime", "integer"),
+        std::make_pair("merit", "decimal"),
+        std::make_pair("shift", "integer"),
+        std::make_pair("size", "integer"),
+    };
+
+    // std::string chainid = "<http://purl.org/net/bel-epa/ccy#C324fff4a-c492-4e8b-94f4-2f599efd7ba1> ";
+    std::string rdfs = "<http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    std::string ccy = "<http://purl.org/net/bel-epa/ccy#";
+    std::string ccyC = ccy + "C";
+    std::string doacc = "<http://purl.org/net/bel-epa/doacc#";
+
+    std::stringstream stream;
+
+    CBlock block;
+    auto& consensus_params = Params().GetConsensus();
+    UniValue data;
+    {
+        LOCK(cs_main);
+        ReadBlockFromDisk(block, pblockindex, consensus_params);
+        data = blockToJSON(block, pblockindex, true);
+    }
+
+    std::string blockid = "<http://purl.org/net/bel-epa/ccy#C" + data["hash"].getValStr() + "> ";
+    if (withTypes)
+        stream << blockid << rdfs << "type> " << ccy << "Block> ." << std::endl;
+    if (!data["nextblockhash"].isNull())
+        stream << blockid << ccy << "next> " << ccyC << data["nextblockhash"].getValStr() << "> ." << std::endl;
+    if (pblockindex->nHeight > 0)
+        stream << blockid << ccy << "prev> " << ccyC << data["previousblockhash"].getValStr() << "> ." << std::endl;
+    stream << blockid << ccy << "time> \"" << DateTimeStrFormat("%Y-%m-%dT%H:%M:%SZ", std::stoll(data["time"].getValStr())) << "\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ." << std::endl;
+
+    for (auto it = blockkeys.begin(); it != blockkeys.end(); ++it)
+    {
+        stream << blockid << ccy << it->first << "> \"" << data[it->first].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#" << it->second << "> ." << std::endl;
+    }
+
+    UniValue tx(UniValue::VARR);
+    for (size_t i=0; i<data["tx"].size(); i++) {
+        UniValue txi(UniValue::VARR);
+        UniValue txo(UniValue::VARR);
+        UniValue script(UniValue::VARR);
+
+        tx = data["tx"][i];
+
+        std::string txid = ccyC + tx["txid"].getValStr() + "> ";
+        if (withTypes)
+            stream << txid << rdfs << "type> " << ccy << "Transaction> ." << std::endl;
+        stream << blockid << ccy << "transaction> " << txid << " ." << std::endl;
+        stream << txid << ccy << "time> \"" << DateTimeStrFormat("%Y-%m-%dT%H:%M:%SZ", std::stoll(data["time"].getValStr())) << "\"^^<http://www.w3.org/2001/XMLSchema#dateTime> ." << std::endl;
+        if (tx["locktime"].getValStr() != "0")
+            stream << txid << ccy << "locktime> \"" << tx["txid"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#integer> ." << std::endl; 
+
+        if (i == 0) {
+            txi = tx["vin"][0];
+            std::string coinbasetxinput = ccyC + tx["txid"].getValStr() + "-0-0> ";
+            if (withTypes)
+                stream << coinbasetxinput << rdfs << "type> " << ccy << "TransactionInput> ." << std::endl;
+            stream << txid << ccy << "input> " << coinbasetxinput << "." << std::endl;
+            stream << coinbasetxinput << ccy + "coinbase> \"" << txi["coinbase"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+            stream << coinbasetxinput << ccy + "sequence> \"" << txi["sequence"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#integer> ." << std::endl;
+
+            txo = tx["vout"][0];
+            script = txo["scriptPubKey"];
+            std::string coinbasetxoutput = ccyC + tx["txid"].getValStr() + "-1-0> ";
+            if (withTypes)
+                stream << coinbasetxoutput << rdfs << "type> " << ccy << "TransactionOutput> ." << std::endl;
+            stream << txid << ccy << "output> " << coinbasetxoutput << "." << std::endl;
+            stream << coinbasetxoutput << ccy + "value> \"" << txo["value"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#decimal> ." << std::endl;
+            stream << coinbasetxoutput << ccy + "n> \"" << txo["n"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#integer> ." << std::endl;
+            stream << coinbasetxoutput << ccy + "pkasm> \"" << script["asm"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+            stream << coinbasetxoutput << ccy + "type> \"" << script["type"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+            if (script["type"].getValStr() != "nulldata" && script["type"].getValStr() != "nonstandard") {
+                stream << coinbasetxoutput << ccy + "reqSigs> \"" << script["reqSigs"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+                std::string coinbasetxoutputaddresses = ccy + "OA" + tx["txid"].getValStr() + strprintf("-0-0> ");
+                for (size_t m=0; m<script["addresses"].size();m++) {
+                    std::string coinbasetxoutputaddress = ccy + script["addresses"][m].getValStr() + "> ";
+                    if (withTypes)
+                        stream << coinbasetxoutputaddress << rdfs << "type> " << ccy << "Address> " << "." << std::endl;
+                    stream << coinbasetxoutput << ccy << "address> " << coinbasetxoutputaddress << "." << std::endl;
+                }
+            }
+        } else {
+
+            // create TransactionInput
+            for (size_t j=0;j<tx["vin"].size();j++) {
+                txi = tx["vin"][j];
+                std::string txinputid = ccyC + tx["txid"].getValStr() + "-0-" + std::to_string((int)j) + "> ";
+                if (withTypes)
+                    stream << txinputid << rdfs << "type> " << ccy << "TransactionInput> ." << std::endl;
+                stream << txid << ccy << "input> " << txinputid << "." << std::endl;
+                stream << txinputid << ccy + "txid> " << ccyC << txi["txid"].getValStr() << "> ." << std::endl;
+                stream << txinputid << ccy + "nvout> \"" << txi["vout"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#integer> ." << std::endl;
+                stream << txinputid << ccy + "ssasm> \"" << txi["scriptSig"]["asm"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+                stream << txinputid << ccy + "sequence> \"" << txi["sequence"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#integer> ." << std::endl;
+                if (!txi["txinwitness"].isNull()) {
+                    for(size_t w=0; w<txi["txinwitness"].size();w++) {
+                        std::string txinputwitness = ccy + txi["txinwitness"][w].getValStr() + "> ";
+                        stream << txinputid << ccy << "witness> " << txinputwitness << " ." << std::endl;
+                    }
+                }
+                // Mark the txins as spent
+                std::string txspentid = ccyC + tx["txid"].getValStr() + "-1-" + txi["vout"].getValStr() + "> ";
+                stream << txspentid << ccy << "spent> \"true\"^^<http://www.w3.org/2001/XMLSchema#boolean> ." << std::endl;
+            }
+
+            // create TransactionOutput
+            for (size_t k=0;k<tx["vout"].size();k++) {
+                txo = tx["vout"][k];
+                script = txo["scriptPubKey"];
+                std::string txoutputid = ccyC + tx["txid"].getValStr() + "-1-" + std::to_string((int)k) + "> ";
+                if (withTypes)
+                    stream << txoutputid << rdfs << "type> " << ccy << "TransactionOutput> ." << std::endl;
+                stream << txid << ccy << "output> " << txoutputid << "." << std::endl;
+                stream << txoutputid << ccy << "spent> \"false\"^^<http://www.w3.org/2001/XMLSchema#boolean> ." << std::endl;
+                stream << txoutputid << ccy + "value> \"" << txo["value"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#decimal> ." << std::endl;
+                stream << txoutputid << ccy + "n> \"" << txo["n"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#integer> ." << std::endl;
+                stream << txoutputid << ccy + "pkasm> \"" << script["asm"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+                stream << txoutputid << ccy + "type> \"" << script["type"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+
+                // nonstandard, pubkey, pubkeyhash, scripthash, multisig, nulldata, 
+                // witness_v0_keyhash, witness_v0_scripthash, witness_unknown"
+
+                if (script["type"].getValStr() != "nulldata" && script["type"].getValStr() != "nonstandard") {
+                    stream << txoutputid << ccy + "reqSigs> \"" << script["reqSigs"].getValStr() << "\"^^<http://www.w3.org/2001/XMLSchema#string> ." << std::endl;
+                    for (size_t n=0; n<script["addresses"].size();n++) {
+                        std::string txoutputaddress = ccy + script["addresses"][n].getValStr() + "> ";
+                        if (withTypes)
+                            stream << txoutputid << rdfs << "type> " << ccy << "Address> " << "." << std::endl;
+                        stream << txoutputid << ccy << "address> " << txoutputaddress << "." << std::endl;
+                    }
+                }
+            }
+        }
+    }
+    return stream.str();
+}
+
+UniValue renderblock(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() > 1)
+        throw std::runtime_error(
+            "renderblock block\n"
+            "\nReturns an RDF serialization of the block.\n"
+            "\nArguments:\n"
+            "1. block    (numeric) block number to render (default last block).\n"
+            "\nResult:\n"
+            "RDF graph serialized as N-triples\n"
+            "\nExamples:\n"
+            + HelpExampleCli("renderblock", "\"100\"")
+            + HelpExampleRpc("renderblock", "\"100\"")
+        );
+
+
+    LOCK(cs_main);
+
+    CBlock block;
+    CBlockIndex* pblockindex = chainActive.Tip();
+    int blocktorender = pblockindex->nHeight;
+
+    if (!request.params[0].isNull()) {
+        blocktorender = request.params[0].get_int();
+        if (blocktorender < 0 || (blocktorender > 0 && blocktorender > pblockindex->nHeight)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block count: should be between 0 and the latest block height");
+        }
+        else {
+            pblockindex = chainActive[blocktorender];
+        }
+    }
+
+    if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
+        throw JSONRPCError(RPC_MISC_ERROR, "Block not available (pruned data)");
+
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        // Block not found on disk. This could be because we have the block
+        // header in our index but don't have the block (for example if a
+        // non-whitelisted node sends us an unrequested long chain of valid
+        // blocks, we add the headers to our index, but don't accept the
+        // block).
+        throw JSONRPCError(RPC_MISC_ERROR, "Block not found on disk");
+
+    UniValue result(UniValue::VSTR);
+    result.setStr(blockgraph(pblockindex));
+    return result;
+}
+
+UniValue renderblockhash(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 1)
+        throw std::runtime_error(
+            "renderblockhash \"blockhash\""
+            "\nReturns a string that is serialized, RDF-encoded data for block 'hash'.\n"
+            "\nArguments:\n"
+            "1. \"blockhash\"          (string, required) The block hash\n"
+            "\nResult:\n"
+            "RDF graph serialized as N-triples\n"
+            "\nExamples:\n"
+            + HelpExampleCli("renderblockhash", "\"e798f3ae4f57adcf25740fe43100d95ec4fd5d43a1568bc89e2b25df89ff6cb0\"")
+            + HelpExampleRpc("renderblockhash", "\"e798f3ae4f57adcf25740fe43100d95ec4fd5d43a1568bc89e2b25df89ff6cb0\"")
+        );
+
+    LOCK(cs_main);
+
+    std::string strHash = request.params[0].get_str();
+    const uint256 hash(uint256S(strHash));
+
+    if (mapBlockIndex.count(hash) == 0)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+    CBlock block;
+    CBlockIndex* pblockindex = mapBlockIndex[hash];
+
+    if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
+        throw JSONRPCError(RPC_MISC_ERROR, "Block not available (pruned data)");
+
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+        // Block not found on disk. This could be because we have the block
+        // header in our index but don't have the block (for example if a
+        // non-whitelisted node sends us an unrequested long chain of valid
+        // blocks, we add the headers to our index, but don't accept the
+        // block).
+        throw JSONRPCError(RPC_MISC_ERROR, "Block not found on disk");
+
+    UniValue result(UniValue::VSTR);
+    result.setStr(blockgraph(pblockindex));
+    return result;
+}
+
+
+UniValue dumptriples(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 3)
+        throw std::runtime_error(
+            "dumptriples filename startblock endblock\n"
+            "\nCreates an RDF serialization of the blockchain in destination, which can be a directory or a path with filename.\n"
+            "\nArguments:\n"
+            "1. filename      (string) optional filename with path (either absolute or relative)\n"
+            "2. startblock    (numeric) optional first block number to dump (default 0).\n"
+            "3. endblock      (numeric) optional last block number to dump (default 1200000).\n");
+
+    fs::path filepath = request.params[0].get_str();
+    filepath = fs::absolute(filepath);
+
+    int nEndBlock = 1200000;
+    int nStartBlock = 0;
+
+    if (request.params.size() > 1)
+        nStartBlock = request.params[1].get_int();
+
+    if (request.params.size() > 2) {
+        nEndBlock = request.params[2].get_int();
+    }
+
+    try {
+
+        boost::filesystem::path filepath = request.params[0].get_str();
+        filepath = boost::filesystem::absolute(filepath);
+
+        /* Prevent arbitrary files from being overwritten. There have been reports
+         * that users have overwritten wallet files this way:
+         * https://github.com/bitcoin/bitcoin/issues/9934
+         * It may also avoid other security issues.
+         */
+        if (boost::filesystem::exists(filepath)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, filepath.string() + " already exists. If you are sure this is what you want, move it out of the way first");
+        }
+
+        std::ofstream file;
+        file.open(filepath.string().c_str());
+        if (!file.is_open())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
+
+        CBlockIndex* pblockindex = chainActive[nStartBlock];
+
+        while (pblockindex->nHeight <= nEndBlock)
+        {
+            file << blockgraph(pblockindex);
+            pblockindex = chainActive.Next(pblockindex);
+        }
+
+        file.close();
+
+    } catch(const boost::filesystem::filesystem_error &e) {
+        throw JSONRPCError(-1, "Error: Triples dump failed!");
+    }
+
+    UniValue reply(UniValue::VOBJ);
+    reply.pushKV("filename", filepath.string());
+
+    return reply;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         argNames
   //  --------------------- ------------------------  -----------------------  ----------
@@ -1643,6 +2182,9 @@ static const CRPCCommand commands[] =
 
     { "blockchain",         "preciousblock",          &preciousblock,          {"blockhash"} },
 
+    { "blockchain",         "listprimerecords",       &listprimerecords,       {"merit"} },
+    { "blockchain",         "listbestprimes",         &listbestprimes,         {"amount", "merit"} },
+
     /* Not shown in help */
     { "hidden",             "invalidateblock",        &invalidateblock,        {"blockhash"} },
     { "hidden",             "reconsiderblock",        &reconsiderblock,        {"blockhash"} },
@@ -1650,6 +2192,9 @@ static const CRPCCommand commands[] =
     { "hidden",             "waitforblock",           &waitforblock,           {"blockhash","timeout"} },
     { "hidden",             "waitforblockheight",     &waitforblockheight,     {"height","timeout"} },
     { "hidden",             "syncwithvalidationinterfacequeue", &syncwithvalidationinterfacequeue, {} },
+    { "hidden",             "dumptriples",            &dumptriples,            {"filename", "start", "end"} },
+    { "hidden",             "renderblock",            &renderblock,            {"block"} },
+    { "hidden",             "renderblockhash",        &renderblockhash,        {"blockhash"} },
 };
 
 void RegisterBlockchainRPCCommands(CRPCTable &t)

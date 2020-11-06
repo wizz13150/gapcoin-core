@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2012-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -85,6 +86,9 @@ public:
 
     /** Network activity state changed. */
     boost::signals2::signal<void (bool networkActive)> NotifyNetworkActiveChanged;
+
+    /** Mining state changed. */
+    boost::signals2::signal<void (bool isMining, double hashrate)> NotifyMiningstatusChanged;
 
     /**
      * Status bar alerts changed.

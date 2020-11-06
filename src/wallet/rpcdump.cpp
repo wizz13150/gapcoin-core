@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -795,6 +796,61 @@ UniValue dumpwallet(const JSONRPCRequest& request)
     return reply;
 }
 
+
+UniValue makekeypair(const JSONRPCRequest& request)
+{
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
+        return NullUniValue;
+    }
+
+    if (request.fHelp || request.params.size() > 1)
+        throw std::runtime_error(
+            "makekeypair\n"
+            "\nMake a public/private key pair.\n"
+            "\nArguments:\n"
+            "1. \"uncompressed\"    (boolean, optional, default=false) Create uncompressed keys.)\n"
+            "\nResult:\n"
+            "{                           (json object)\n"
+            "  \"key data\" : {        (string) The public/private keypair\n"
+            "}\n"
+            "\nMake a public/private key pair.\n"
+            + HelpExampleCli("makekeypair", "") +
+            "\nAs a JSON-RPC call\n"
+            + HelpExampleRpc("makekeypair", "")
+            );
+
+    // Whether to generate uncompressed keys
+    bool compressed_wanted = true;
+    if (!request.params[0].isNull()) {
+        compressed_wanted = request.params[0].isNum() ? (request.params[0].get_int() != 0) : request.params[0].get_bool();
+    }
+
+    std::vector<std::string> addresstypes = {"legacy", "segwit", "bech32"};
+
+    int i = 0;
+    CKey key;
+    key.MakeNewKey(compressed_wanted);
+    CPubKey pubkey = key.GetPubKey();
+    CPrivKey privkey = key.GetPrivKey();
+    std::vector<CTxDestination> dests = GetAllDestinationsForKey(pubkey);
+
+    UniValue addresses(UniValue::VOBJ);
+    for (const auto& dest : GetAllDestinationsForKey(pubkey)) {
+        addresses.push_back(Pair(strprintf("%s", addresstypes[i]), EncodeDestination(dest)));
+        i++;
+    }
+
+    UniValue result(UniValue::VOBJ);
+
+    result.push_back(Pair("compressed", compressed_wanted));
+    result.push_back(Pair("addresses", addresses));
+    result.push_back(Pair("privkey", CBitcoinSecret(key).ToString()));
+    result.push_back(Pair("public key", HexStr(pubkey)));
+    result.push_back(Pair("private key", HexStr(key)));
+
+    return result;
+}
 
 UniValue ProcessImport(CWallet * const pwallet, const UniValue& data, const int64_t timestamp)
 {

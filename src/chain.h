@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -206,12 +207,17 @@ public:
     //! Verification status of this block. See enum BlockStatus
     uint32_t nStatus;
 
+    // pow utils
+    PoWUtils *utils;
+
     //! block header
     int32_t nVersion;
     uint256 hashMerkleRoot;
     uint32_t nTime;
-    uint32_t nBits;
+    uint64_t nDifficulty;
     uint32_t nNonce;
+    uint16_t nShift;
+    std::vector<unsigned char> nAdd;
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId;
@@ -238,13 +244,17 @@ public:
         nVersion       = 0;
         hashMerkleRoot = uint256();
         nTime          = 0;
-        nBits          = 0;
+        nDifficulty    = 0;
         nNonce         = 0;
+        nShift         = 0;
+        nAdd.assign(1, 0);
+        utils          = nullptr;
     }
 
     CBlockIndex()
     {
         SetNull();
+        utils = new PoWUtils();
     }
 
     explicit CBlockIndex(const CBlockHeader& block)
@@ -254,8 +264,11 @@ public:
         nVersion       = block.nVersion;
         hashMerkleRoot = block.hashMerkleRoot;
         nTime          = block.nTime;
-        nBits          = block.nBits;
+        nDifficulty    = block.nDifficulty;
         nNonce         = block.nNonce;
+        nShift         = block.nShift;
+        nAdd.assign(block.nAdd.begin(), block.nAdd.end());
+        utils          = new PoWUtils();
     }
 
     CDiskBlockPos GetBlockPos() const {
@@ -284,8 +297,10 @@ public:
             block.hashPrevBlock = pprev->GetBlockHash();
         block.hashMerkleRoot = hashMerkleRoot;
         block.nTime          = nTime;
-        block.nBits          = nBits;
+        block.nDifficulty    = nDifficulty;
         block.nNonce         = nNonce;
+        block.nShift         = nShift;
+        block.nAdd.assign(nAdd.begin(), nAdd.end());
         return block;
     }
 
@@ -403,8 +418,10 @@ public:
         READWRITE(hashPrev);
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
-        READWRITE(nBits);
+        READWRITE(nDifficulty);
         READWRITE(nNonce);
+        READWRITE(nShift);
+        READWRITE(nAdd);
     }
 
     uint256 GetBlockHash() const
@@ -414,8 +431,10 @@ public:
         block.hashPrevBlock   = hashPrev;
         block.hashMerkleRoot  = hashMerkleRoot;
         block.nTime           = nTime;
-        block.nBits           = nBits;
+        block.nDifficulty     = nDifficulty;
         block.nNonce          = nNonce;
+        block.nShift          = nShift;
+        block.nAdd.assign(nAdd.begin(), nAdd.end());
         return block.GetHash();
     }
 

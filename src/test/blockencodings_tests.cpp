@@ -2,16 +2,22 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <cstddef>
 #include <blockencodings.h>
+#include <primitives/block.h>
+#include <primitives/transaction.h>
 #include <consensus/merkle.h>
 #include <chainparams.h>
+#include <chainparamsbase.h>
 #include <random.h>
-
+#include <uint256.h>
 #include <test/test_bitcoin.h>
-
+#include <PoWCore/src/PoWUtils.h>
 #include <boost/test/unit_test.hpp>
 
 std::vector<std::pair<uint256, CTransactionRef>> extra_txn;
+
+static PoWUtils *powUtils = new PoWUtils();
 
 struct RegtestingSetup : public TestingSetup {
     RegtestingSetup() : TestingSetup(CBaseChainParams::REGTEST) {}
@@ -31,8 +37,10 @@ static CBlock BuildBlockTestCase() {
     block.vtx[0] = MakeTransactionRef(tx);
     block.nVersion = 42;
     block.hashPrevBlock = InsecureRand256();
-    block.nBits = 0x207fffff;
-
+    block.nDifficulty = PoWUtils::min_test_difficulty;
+    block.nShift = 20;
+    uint8_t nAdd[]      = { 25, 1 };
+    block.nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
     tx.vin[0].prevout.hash = InsecureRand256();
     tx.vin[0].prevout.n = 0;
     block.vtx[1] = MakeTransactionRef(tx);
@@ -42,12 +50,14 @@ static CBlock BuildBlockTestCase() {
         tx.vin[i].prevout.hash = InsecureRand256();
         tx.vin[i].prevout.n = 0;
     }
+
     block.vtx[2] = MakeTransactionRef(tx);
 
     bool mutated;
     block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
     assert(!mutated);
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
+    while (!CheckProofOfWork(block.GetHash(), block.nShift, &block.nAdd, block.nDifficulty, Params().GetConsensus()))
+        ++block.nNonce;
     return block;
 }
 
@@ -287,13 +297,19 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRoundTripTest)
     block.vtx[0] = MakeTransactionRef(std::move(coinbase));
     block.nVersion = 42;
     block.hashPrevBlock = InsecureRand256();
-    block.nBits = 0x207fffff;
+    block.nDifficulty = PoWUtils::min_test_difficulty;
+    block.nShift = 20;
+    uint8_t nAdd[]      = { 25, 1 };
+    block.nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
 
     bool mutated;
     block.hashMerkleRoot = BlockMerkleRoot(block, &mutated);
     assert(!mutated);
-    while (!CheckProofOfWork(block.GetHash(), block.nBits, Params().GetConsensus())) ++block.nNonce;
-
+    while (!CheckProofOfWork(block.GetHash(), block.nShift, &block.nAdd, block.nDifficulty, Params().GetConsensus())) {
+        ++block.nNonce;
+        if (block.nNonce % 10000 == 0)
+            BOOST_TEST_MESSAGE(strprintf("nNonce = %s\n", block.nNonce));
+    }
     // Test simple header round-trip with only coinbase
     {
         CBlockHeaderAndShortTxIDs shortIDs(block, false);

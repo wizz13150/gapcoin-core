@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -282,13 +283,35 @@ bool CBlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, 
                 pindexNew->nVersion       = diskindex.nVersion;
                 pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
                 pindexNew->nTime          = diskindex.nTime;
-                pindexNew->nBits          = diskindex.nBits;
+                pindexNew->nDifficulty    = diskindex.nDifficulty;
                 pindexNew->nNonce         = diskindex.nNonce;
+                pindexNew->nShift         = diskindex.nShift;
+                pindexNew->nAdd.assign(diskindex.nAdd.begin(), diskindex.nAdd.end());
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
 
-                if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, consensusParams))
+
+                /* Original Gapcoin v0.9 had:
+
+                (in main.h)
+
+                bool CheckIndex() const
+                    {
+                        return CheckProofOfWork(GetBlockHash(), nShift, &nAdd, nDifficulty);
+                    }
+
+                (and here)
+
+                bool slowStart = GetBoolArg("-slowstart", false);
+                if (slowStart && !pindexNew->CheckIndex())
+                    return error("LoadBlockIndex() : CheckIndex failed: %s", pindexNew->ToString());
+
+                (so the corresponding v0.16 code is commented out)
+
+                if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nShift, &pindexNew->nAdd, pindexNew->nDifficulty, consensusParams))
                     return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
+
+                */
 
                 pcursor->Next();
             } else {

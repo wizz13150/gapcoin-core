@@ -1,14 +1,18 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <miner.h>
 
 #include <amount.h>
+#include <arith_uint256.h>
+#include <bignum.h>
 #include <chain.h>
 #include <chainparams.h>
 #include <coins.h>
+#include <compat.h>
 #include <consensus/consensus.h>
 #include <consensus/tx_verify.h>
 #include <consensus/merkle.h>
@@ -20,21 +24,37 @@
 #include <policy/policy.h>
 #include <pow.h>
 #include <primitives/transaction.h>
+#include <rpc/protocol.h>
 #include <script/standard.h>
 #include <timedata.h>
 #include <util.h>
 #include <utilmoneystr.h>
 #include <validationinterface.h>
+#include <wallet/wallet.h>
+#include <PoWCore/src/PoW.h>
+#include <PoWCore/src/PoWProcessor.h>
+#include <PoWCore/src/PoWUtils.h>
+#include <PoWCore/src/Sieve.h>
 
+#include <boost/thread.hpp>
 #include <algorithm>
 #include <memory>
 #include <queue>
 #include <utility>
 
+#include <boost/tuple/tuple.hpp>
+#include <openssl/sha.h>
+
+extern std::vector<CWalletRef> vpwallets;
 //////////////////////////////////////////////////////////////////////////////
 //
 // BitcoinMiner
 //
+
+unsigned int nTransactionsUpdated = 0;
+uint256 hashBestChain = ArithToUint256(0);
+CBlockIndex* pindexBest = NULL;
+
 
 //
 // Unconfirmed transactions in the memory pool often depend on other
@@ -44,6 +64,36 @@
 
 uint64_t nLastBlockTx = 0;
 uint64_t nLastBlockWeight = 0;
+uint64_t nMiningTimeStart = 0;
+uint64_t nHashesPerSec = 0;
+uint64_t nHashesDone = 0;
+int64_t nHPSTimerStart = 0;
+
+class BlockProcessor : public PoWProcessor {
+
+  public:
+
+    BlockProcessor(CBlock *pblock, std::shared_ptr<CReserveScript> coinbase_script) : PoWProcessor() {
+      this->pblock = pblock;
+      this->coinbasescript = coinbase_script;
+    }
+
+    bool process(PoW *pow) {
+      SetThreadPriority(THREAD_PRIORITY_NORMAL);
+
+      pow->get_adder(&pblock->nAdd);
+      bool ret = CheckWork(pblock, coinbasescript);
+
+      SetThreadPriority(THREAD_PRIORITY_LOWEST);
+      return !ret;
+    }
+
+  private:
+
+    CBlock *pblock;
+    std::shared_ptr<CReserveScript> coinbasescript;
+
+};
 
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev)
 {
@@ -55,7 +105,7 @@ int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParam
 
     // Updating time can change work required on testnet:
     if (consensusParams.fPowAllowMinDifficultyBlocks)
-        pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
+        pblock->nDifficulty = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
 
     return nNewTime - nOldTime;
 }
@@ -162,7 +212,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vin[0].prevout.SetNull();
     coinbaseTx.vout.resize(1);
     coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
-    coinbaseTx.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, chainparams.GetConsensus());
+    coinbaseTx.vout[0].nValue = nFees + GetBlockSubsidy(nHeight, GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus()), chainparams.GetConsensus());
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
     pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
@@ -173,8 +223,19 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
-    pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
-    pblock->nNonce         = 0;
+    pblock->nDifficulty    = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
+    pblock->nShift         = nMiningShift;
+    if (TestNet())
+    {
+        uint8_t nAdd[] = { 25, 1 };
+        pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
+    } else {
+        uint8_t nAdd[] = { 233, 156, 15 };
+        pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
+    }
+
+    // pblock->vtx[0].vout[0].nValue = nFees + 50; // GetBlockSubsidy(pindexPrev->nHeight+1, GetNextWorkRequired(pindexPrev, pblock), chainparams.GetConsensus());
+    // pblocktemplate->vTxFees[0] = -nFees;
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     CValidationState state;
@@ -455,4 +516,273 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 
     pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// Internal miner
+//
+double dHashesPerSec = 0.0;
+bool isMining = false;
+double dTestsPerSec = 0.0;
+double d15GapsPerHour = 0.0;
+uint64_t nMiningSieveSize = 33554432;
+uint64_t nMiningPrimes = 900000;
+uint16_t nMiningShift = 25;
+static std::vector<double> dThreadHashesPerSec;
+static std::vector<double> dThreadTestsPerSec;
+
+bool CheckWork(const CBlock* pblock, std::shared_ptr<CReserveScript> coinbaseScript)
+{
+    uint256 hash = pblock->GetHash();
+    PoW pow(new std::vector<uint8_t>(hash.begin(), hash.end()),
+            pblock->nShift,
+            &pblock->nAdd,
+            pblock->nDifficulty);
+
+    uint64_t nDifficulty = pow.difficulty();
+
+    if (nDifficulty < pblock->nDifficulty)
+        return false;
+
+    // Found a solution
+
+    std::vector<uint8_t> vStart, vEnd;
+    pow.get_gap(&vStart, &vEnd);
+
+    std::vector<uint8_t> vDifficulty(pblock->nAdd.begin(), pblock->nAdd.end());
+
+    // insert 0 a the begining to avoid sig problems
+    vDifficulty.push_back(0);
+    vStart.push_back(0);
+    vEnd.push_back(0);
+
+    CBigNum bnTarget, bnStart, bnEnd;
+    bnTarget.setvch(vDifficulty);
+    bnStart.setvch(vStart);
+    bnEnd.setvch(vEnd);
+
+    //// debug print
+    LogPrintf("**** GapcoinMiner found proof-of-work - shift: %llu, primedigits: %llu, difficulty: %llu, target: %llu, generated %s.\n",
+              pblock->nShift, bnStart.ToString().length(), nDifficulty, pblock->nDifficulty, FormatMoney(pblock->vtx[0]->vout[0].nValue));
+    LogPrintf("%s\n", pblock->ToString());
+
+    {
+        LOCK(cs_main);
+        if (pblock->hashPrevBlock != chainActive.Tip()->GetBlockHash())
+            return error("GapcoinMiner : generated block is stale");
+    }
+
+    //mark script as important because it was used at least for one coinbase output if the script came from the wallet
+    coinbaseScript->KeepScript();
+
+    // Inform about the new block
+    GetMainSignals().BlockFound(pblock->GetHash());
+
+    // Process this block the same as if we had received it from another node
+    if (!ProcessNewBlock(Params(), std::make_shared<const CBlock>(*pblock), true, nullptr))
+        return error("GapcoinMiner : ProcessBlock, block not accepted");
+
+    return true;
+}
+
+CWallet *GetFirstWallet() {
+    while(vpwallets.size() == 0){
+        MilliSleep(100);
+    }
+    if (vpwallets.size() == 0)
+        return(NULL);
+    return(vpwallets[0]);
+}
+
+void static GapcoinMiner(int nThread, int numThreads, const CChainParams& chainparams)
+{
+    LogPrintf("GapcoinMiner %s started\n", nThread);
+    // SetThreadPriority(20); //THREAD_PRIORITY_LOWEST
+    RenameThread(strprintf("gapcoin-miner %s", nThread).c_str());
+
+    unsigned int nExtraNonce = 0;
+    arith_uint256 hashTarget = UintToArith256(uint256S("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"));
+    Sieve sieve(NULL, nMiningPrimes, nMiningSieveSize);
+
+
+    CWallet *  pWallet = GetFirstWallet();
+
+
+    if (!EnsureWalletIsAvailable(pWallet, false) || pWallet == NULL)
+        throw std::runtime_error(strprintf("Gapcoin miner %s wallet unavailable (mining requires a wallet)", nThread));
+
+    std::shared_ptr<CReserveScript> coinbaseScript;
+
+    pWallet->GetScriptForMining(coinbaseScript);
+
+    // Throw an error if no script was provided.  This can happen
+    // due to some internal error but also if the keypool is empty.
+    // In the latter case, already the pointer is NULL.
+    if (!coinbaseScript || coinbaseScript->reserveScript.empty())
+        throw std::runtime_error(strprintf("Gapcoin miner %s no coinbase script available (mining requires a wallet)", nThread));
+
+    try {
+        while (true) {
+
+            if (chainparams.MiningRequiresPeers()) {
+                // Busy-wait for the network to come online so we don't waste time mining
+                // on an obsolete chain. In regtest mode we expect to fly solo.
+                do {
+                    if ((g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) > 0) && !IsInitialBlockDownload()) {
+                        break;
+                    }
+
+                    MilliSleep(1000);
+                } while (true);
+            }
+
+
+            //
+            // Create new block
+            //
+            unsigned int nTransactionsUpdatedLast = mempool.GetTransactionsUpdated();
+            CBlockIndex* pindexPrev = chainActive.Tip();
+            if(!pindexPrev) break;
+
+            std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(Params()).CreateNewBlock(coinbaseScript->reserveScript));
+
+            if (!pblocktemplate.get())
+            {
+                LogPrintf("GapcoinMiner -- Keypool ran out for miner %s, please call keypoolrefill before restarting the mining thread.\n", nThread);
+                return;
+            }
+
+            CBlock *pblock = &pblocktemplate->block;
+            IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+
+            LogPrintf("Gapcoin miner %s searching for a valid hash with %u transactions in block (%u bytes).\n", nThread, pblock->vtx.size(),
+                ::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
+
+            //
+            // Search
+            //
+            BlockProcessor processor(pblock, coinbaseScript);
+
+            sieve.set_pprocessor(&processor);
+            int64_t nStart = GetTime();
+
+            // provide unique hashes for each thread
+            pblock->nNonce = nThread;
+
+            while (true)
+            {
+
+                // header hash has to be greater than 2^255 - 1
+                while (UintToArith256(pblock->GetHash()) <= hashTarget)
+                    pblock->nNonce += numThreads;
+
+                // re-get the hash for the block but as uint256
+                uint256 hash = pblock->GetHash();
+                std::vector<uint8_t> vHash(hash.begin(), hash.end());
+
+                PoW pow(&vHash, pblock->nShift, &pblock->nAdd, pblock->nDifficulty);
+                sieve.run_sieve(&pow, NULL);
+
+                static CCriticalSection cs;
+                {
+                    LOCK(cs);
+
+                    dThreadHashesPerSec[nThread] = sieve.primes_per_sec();
+                    dThreadTestsPerSec[nThread] = sieve.tests_per_second();
+                    dHashesPerSec = 0.0;
+                    dTestsPerSec  = 0.0;
+
+                    for (uint32_t i = 0; i < dThreadHashesPerSec.size(); i++) {
+                        dHashesPerSec += dThreadHashesPerSec[i];
+                        dTestsPerSec  += dThreadTestsPerSec[i];
+                    }
+
+                    nHPSTimerStart = GetTimeMillis();
+
+                    static int64_t nLogTime = 0;
+                    if (GetTime() - nLogTime > 30 * 60)
+                    {
+                        nLogTime = GetTime();
+                        LogPrintf("Gapcoin miner %s primemeter %6.0f primes/s.\n", nThread, dHashesPerSec);
+                    }
+
+                }
+
+                // Check for stop or if block needs to be rebuilt
+                boost::this_thread::interruption_point();
+                // Regtest mode doesn't require peers
+                if ((g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0) && chainparams.MiningRequiresPeers())
+                    break;
+                if (pblock->nNonce >= 0xffff0000)
+                    break;
+                if (mempool.GetTransactionsUpdated() != nTransactionsUpdatedLast && GetTime() - nStart > 60)
+                    break;
+                if (pindexPrev != chainActive.Tip())
+                    break;
+
+                // Update nTime every few seconds
+                if (UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev) < 0)
+                    break; // Recreate the block if the clock has run backwards,
+                           // so that we can use the correct time.
+            }
+        }
+    }
+    catch (const boost::thread_interrupted&)
+    {
+        LogPrintf("GapcoinMiner %s terminated.\n", nThread);
+
+        static CCriticalSection cs;
+        {
+            LOCK(cs);
+            dHashesPerSec = 0.0;
+        }
+        throw;
+    }
+    catch (const std::runtime_error &e)
+    {
+        LogPrintf("GapcoinMiner %s runtime error: %s.\n", nThread, e.what());
+        return;
+    }
+}
+
+int GenerateGapcoins(bool fGenerate, int nThreads, const CChainParams& chainparams)
+{
+
+    static boost::thread_group* minerThreads = NULL;
+
+    // int nThreads = gArgs.GetArg("genproclimit", -1);
+    int numCores = GetNumCores();
+    if (nThreads < 0)
+        nThreads = numCores;
+
+    if (minerThreads != NULL)
+    {
+        minerThreads->interrupt_all();
+        delete minerThreads;
+        minerThreads = NULL;
+    }
+
+    if (nThreads == 0 || !fGenerate)
+        return numCores;
+
+    dThreadHashesPerSec.clear();
+    dThreadTestsPerSec.clear();
+
+    minerThreads = new boost::thread_group();
+
+    //Reset metrics
+    nMiningTimeStart = GetTimeMicros();
+    nHashesDone = 0;
+    nHashesPerSec = 0;
+    isMining = fGenerate;
+
+    for (int i = 0; i < nThreads; i++)
+    {
+        dThreadHashesPerSec.push_back(0.0);
+        dThreadTestsPerSec.push_back(0.0);
+        minerThreads->create_thread(boost::bind(&GapcoinMiner, i, nThreads, boost::cref(chainparams)));
+    }
+
+    return(numCores);
 }

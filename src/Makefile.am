@@ -79,6 +79,7 @@ BITCOIN_CORE_H = \
   addrman.h \
   base58.h \
   bech32.h \
+  bignum.h \
   bloom.h \
   blockencodings.h \
   chain.h \
@@ -110,6 +111,10 @@ BITCOIN_CORE_H = \
   limitedmap.h \
   memusage.h \
   merkleblock.h \
+  PoWCore/src/PoWUtils.h \
+  PoWCore/src/PoW.h \
+  PoWCore/src/PoWProcessor.h \
+  PoWCore/src/Sieve.h \
   miner.h \
   net.h \
   net_processing.h \
@@ -206,6 +211,9 @@ libbitcoin_server_a_SOURCES = \
   policy/fees.cpp \
   policy/policy.cpp \
   policy/rbf.cpp \
+  PoWCore/src/PoWUtils.cpp \
+  PoWCore/src/PoW.cpp \
+  PoWCore/src/Sieve.cpp \
   pow.cpp \
   rest.cpp \
   rpc/blockchain.cpp \
@@ -287,6 +295,7 @@ libbitcoin_consensus_a_SOURCES = \
   amount.h \
   arith_uint256.cpp \
   arith_uint256.h \
+  bignum.h \
   consensus/merkle.cpp \
   consensus/merkle.h \
   consensus/params.h \
@@ -331,6 +340,9 @@ libbitcoin_common_a_SOURCES = \
   netaddress.cpp \
   netbase.cpp \
   policy/feerate.cpp \
+  PoWCore/src/PoWUtils.cpp \
+  PoWCore/src/PoW.cpp \
+  PoWCore/src/Sieve.cpp \
   protocol.cpp \
   scheduler.cpp \
   script/sign.cpp \

@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -29,10 +30,12 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "setmocktime", 0, "timestamp" },
     { "generate", 0, "nblocks" },
     { "generate", 1, "maxtries" },
+    { "setgenerate", 0, "generate" },
+    { "setgenerate", 1, "maxproclimit" },
     { "generatetoaddress", 0, "nblocks" },
     { "generatetoaddress", 2, "maxtries" },
-    { "getnetworkhashps", 0, "nblocks" },
-    { "getnetworkhashps", 1, "height" },
+    { "getnetworkprimesps", 0, "nblocks" },
+    { "getnetworkprimesps", 1, "height" },
     { "sendtoaddress", 1, "amount" },
     { "sendtoaddress", 4, "subtractfeefromamount" },
     { "sendtoaddress", 5 , "replaceable" },
@@ -64,6 +67,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listaccounts", 1, "include_watchonly" },
     { "walletpassphrase", 1, "timeout" },
     { "getblocktemplate", 0, "template_request" },
+    { "getwork", 0, "data" },
     { "listsinceblock", 1, "target_confirmations" },
     { "listsinceblock", 2, "include_watchonly" },
     { "listsinceblock", 3, "include_removed" },
@@ -81,6 +85,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "listunspent", 2, "addresses" },
     { "listunspent", 3, "include_unsafe" },
     { "listunspent", 4, "query_options" },
+    { "listprimerecords", 0, "merit" },
+    { "listbestprimes", 0, "amount" },
+    { "listbestprimes", 1, "merit" },
     { "getblock", 1, "verbosity" },
     { "getblock", 1, "verbose" },
     { "getblockheader", 1, "verbose" },
@@ -143,6 +150,12 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "echojson", 9, "arg9" },
     { "rescanblockchain", 0, "start_height"},
     { "rescanblockchain", 1, "stop_height"},
+    { "makekeypair", 0, "uncompressed" },
+    { "renderblock", 0, "block" },
+    { "dumptriples", 1, "start" },
+    { "dumptriples", 2, "end" },
+    { "getnetworkhashps", 0, "lookup"},
+    { "getnetworkhashps", 1, "height"},
 };
 
 class CRPCConvertTable

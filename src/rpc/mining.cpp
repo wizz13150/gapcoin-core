@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +9,7 @@
 #include <chain.h>
 #include <chainparams.h>
 #include <consensus/consensus.h>
+#include <consensus/merkle.h>
 #include <consensus/params.h>
 #include <consensus/validation.h>
 #include <core_io.h>
@@ -24,10 +26,47 @@
 #include <util.h>
 #include <utilstrencodings.h>
 #include <validationinterface.h>
+#include <wallet/wallet.h>
 #include <warnings.h>
 
 #include <memory>
 #include <stdint.h>
+
+#include <univalue.h>
+
+extern uint64_t nHashesPerSec;
+
+/**
+ * Temporary functions for the purpose of
+ * getblock
+ **/
+
+#ifdef ENABLE_WALLET
+
+// Allocated in InitRPCMining, freed in ShutdownRPCMining
+/*
+static CReserveKey* pMiningKey = NULL;
+
+void InitRPCMining()
+{
+    if (!pwalletMain)
+        return;
+
+    // getblocktemplate mining rewards paid here:
+    pMiningKey = new CReserveKey(pwalletMain);
+}
+
+void ShutdownRPCMining()
+{
+    if (!pMiningKey)
+        return;
+
+    delete pMiningKey;
+    pMiningKey = NULL;
+}
+*/
+
+#endif //ENABLE_WALLET
 
 unsigned int ParseConfirmTarget(const UniValue& value)
 {
@@ -38,6 +77,15 @@ unsigned int ParseConfirmTarget(const UniValue& value)
     }
     return (unsigned int)target;
 }
+
+// Return average network primes per second based on the last 'lookup' blocks,
+// or from the last difficulty change if 'lookup' is nonpositive.
+// If 'height' is nonnegative, compute the estimate at the time when a given block was found.
+
+// int64_t GetNetworkPrimesPS(int lookup, int height) {
+//     return GetNetworkHashPS(int lookup, int height);
+// }
+
 
 /**
  * Return average network hashes per second based on the last 'lookup' blocks,
@@ -103,6 +151,27 @@ UniValue getnetworkhashps(const JSONRPCRequest& request)
     return GetNetworkHashPS(!request.params[0].isNull() ? request.params[0].get_int() : 120, !request.params[1].isNull() ? request.params[1].get_int() : -1);
 }
 
+UniValue getnetworkprimesps(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() > 2)
+        throw runtime_error(
+            "getnetworkprimesps ( blocks height )\n"
+            "\nReturns the estimated network primes per second based on the last n blocks.\n"
+            "Pass in [blocks] to override # of blocks, -1 specifies since last difficulty change.\n"
+            "Pass in [height] to estimate the network speed at the time when a certain block was found.\n"
+            "\nArguments:\n"
+            "1. blocks     (numeric, optional, default=120) The number of blocks, or -1 for blocks since last difficulty change.\n"
+            "2. height     (numeric, optional, default=-1) To estimate at the time of the given height.\n"
+            "\nResult:\n"
+            "x             (numeric) Hashes per second estimated\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getnetworkprimesps", "")
+            + HelpExampleRpc("getnetworkprimesps", "")
+       );
+
+    return GetNetworkHashPS(request.params.size() > 0 ? request.params[0].get_int() : 120, request.params.size() > 1 ? request.params[1].get_int() : -1);
+}
+
 UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGenerate, uint64_t nMaxTries, bool keepScript)
 {
     static const int nInnerLoopCount = 0x10000;
@@ -126,7 +195,7 @@ UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGen
             LOCK(cs_main);
             IncrementExtraNonce(pblock, chainActive.Tip(), nExtraNonce);
         }
-        while (nMaxTries > 0 && pblock->nNonce < nInnerLoopCount && !CheckProofOfWork(pblock->GetHash(), pblock->nBits, Params().GetConsensus())) {
+        while (nMaxTries > 0 && pblock->nNonce < nInnerLoopCount && !CheckProofOfWork(pblock->GetHash(), pblock->nShift, &pblock->nAdd, pblock->nDifficulty, Params().GetConsensus())) {
             ++pblock->nNonce;
             --nMaxTries;
         }
@@ -185,6 +254,130 @@ UniValue generatetoaddress(const JSONRPCRequest& request)
     return generateBlocks(coinbaseScript, nGenerate, nMaxTries, false);
 }
 
+UniValue getprimespersec(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 0)
+        throw runtime_error(
+            "getprimespersec\n"
+            "\nReturns a recent primes per second performance measurement while generating.\n"
+            "See the getgenerate and setgenerate calls to turn generation on and off.\n"
+            "\nResult:\n"
+            "n            (numeric) The recent primes per second when generation is on (will return 0 if generation is off)\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getprimespersec", "")
+            + HelpExampleRpc("getprimespersec", "")
+        );
+
+    return (uint64_t)nHashesPerSec;
+}
+
+
+bool getgenerate()
+{
+    return gArgs.GetBoolArg("-gen", DEFAULT_GENERATE);
+}
+
+UniValue getgenerate(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 0)
+        throw std::runtime_error(
+            "getgenerate\n"
+            "\nReturn if the server is set to generate coins or not. The default is false.\n"
+            "It is set with the command line argument -gen (or gapcoin.conf setting gen)\n"
+            "It can also be set with the setgenerate call.\n"
+            "\nResult\n"
+            "true|false      (boolean) If the server is set to generate coins or not\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getgenerate", "")
+            + HelpExampleRpc("getgenerate", "")
+        );
+
+    LOCK(cs_main);
+    return gArgs.GetBoolArg("-gen", DEFAULT_GENERATE);
+}
+
+UniValue setgenerate(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1 || request.params.size() > 5)
+        throw std::runtime_error(
+            "setgenerate generate ( genproclimit ) ( sievesize ) ( sieveprimes ) ( shift )\n"
+            "\nSet 'generate' true or false to turn generation on or off.\n"
+            "Generation is limited to 'genproclimit' processors, -1 is unlimited.\n"
+            "See the getgenerate call for the current setting.\n"
+            "\nArguments:\n"
+            "1. generate         (boolean, required) Set to true to turn on generation, false to turn off.\n"
+            "2. genproclimit     (numeric, optional) Set the processor limit for when generation is on. Can be -1 for unlimited.\n"
+            "3. sievesize        (numeric, optional) Sets the size of the prime sieve.\n"
+            "4. sieveprimes      (numeric, optional) Sets the amount of primes used in the sieve.\n"
+            "5. shift            (numeric, optional) Sets the header shift.\n"
+            "                    Note: sieve size can only have 2^shift size.\n"
+            "\nExamples:\n"
+            "\nSet the generation on with a limit of one processor\n"
+            + HelpExampleCli("setgenerate", "true 1") +
+            "\nCheck the setting\n"
+            + HelpExampleCli("getgenerate", "") +
+            "\nTurn off generation\n"
+            + HelpExampleCli("setgenerate", "false") +
+            "\nUsing json rpc\n"
+            + HelpExampleRpc("setgenerate", "true, 1")
+        );
+
+    if (Params().MineBlocksOnDemand())
+        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Use the generate method instead of setgenerate on this network");
+
+
+    bool fGenerate = true;
+    if (request.params.size() > 0)
+        fGenerate = request.params[0].get_bool();
+
+    int nGenProcLimit = gArgs.GetArg("-genproclimit", DEFAULT_GENERATE_THREADS);
+    if (request.params.size() > 1)
+    {
+        nGenProcLimit = request.params[1].get_int();
+        if (nGenProcLimit == 0)
+            fGenerate = false;
+    }
+
+    if (request.params.size() > 2)
+    {
+        nMiningSieveSize = (request.params[2].get_int() < 1000) ? 1000 : request.params[2].get_int();
+
+        if (nMiningShift < 64 && nMiningSieveSize > (((uint64_t) 1) << nMiningShift))
+           nMiningSieveSize = (((uint64_t) 1) << nMiningShift);
+    }
+
+    if (request.params.size() > 3)
+    {
+        nMiningPrimes = (request.params[3].get_int() < 1000) ? 1000 : request.params[3].get_int();
+    }
+
+    if (request.params.size() > 4)
+    {
+        if (request.params[4].get_int() < 14)
+            nMiningShift = 14;
+        else if (request.params[4].get_int() >= (1 << 16))
+            nMiningShift = (1 << 16) - 1;
+        else
+            nMiningShift = request.params[4].get_int();
+
+        if (nMiningShift < 64 && nMiningSieveSize > (((uint64_t) 1) << nMiningShift))
+           nMiningSieveSize = (((uint64_t) 1) << nMiningShift);
+    }
+
+    gArgs.SoftSetArg("-gen", (fGenerate ? "1" : "0"));
+    gArgs.SoftSetArg("-genproclimit", itostr(nGenProcLimit));
+    //mapArgs["-gen"] = (fGenerate ? "1" : "0");
+    //mapArgs ["-genproclimit"] = itostr(nGenProcLimit);
+    int numCores = GenerateGapcoins(fGenerate, nGenProcLimit, Params());
+
+    nGenProcLimit = nGenProcLimit >= 0 ? nGenProcLimit : numCores;
+    std::string msg = std::to_string(nGenProcLimit) + " of " + std::to_string(numCores);
+    return msg;
+}
+
+
+static PoWUtils *powUtils = new PoWUtils;
+
 UniValue getmininginfo(const JSONRPCRequest& request)
 {
     if (request.fHelp || request.params.size() != 0)
@@ -197,7 +390,14 @@ UniValue getmininginfo(const JSONRPCRequest& request)
             "  \"currentblockweight\": nnn, (numeric) The last block weight\n"
             "  \"currentblocktx\": nnn,     (numeric) The last block transaction\n"
             "  \"difficulty\": xxx.xxxxx    (numeric) The current difficulty\n"
-            "  \"networkhashps\": nnn,      (numeric) The network hashes per second\n"
+            "  \"generate\": true|false     (boolean) If the generation is on or off (see getgenerate or setgenerate calls)\n"
+            "  \"genproclimit\": n          (numeric) The processor limit for generation. -1 if no generation. (see getgenerate or setgenerate calls)\n"
+            "  \"sievesize\": n             (numeric, optional) The size of the prime sieve.\n"
+            "  \"sieveprimes\": n           (numeric, optional) The amount of primes used in the sieve.\n"
+            "  \"shift\": n                 (numeric, optional) The header shift.\n"
+            "  \"primespersec\": n          (numeric) The primes per second of the generation, or 0 if no generation.\n"
+            "  \"testspersec\": n           (numeric) The primes tests per second of the generation, or 0 if no generation.\n"
+            "  \"gapsperday\": xxx.xxxxx    (numeric) The estimated (difficulty) gaps per day\n"
             "  \"pooledtx\": n              (numeric) The size of the mempool\n"
             "  \"chain\": \"xxxx\",           (string) current network name as defined in BIP70 (main, test, regtest)\n"
             "  \"warnings\": \"...\"          (string) any network and blockchain warnings\n"
@@ -211,12 +411,29 @@ UniValue getmininginfo(const JSONRPCRequest& request)
 
     LOCK(cs_main);
 
+    // For gaps_per_day
+    uint64_t difficulty = 0;
+    if (chainActive.Tip() == NULL)
+        difficulty = (TestNet() ? PoWUtils::min_test_difficulty : PoWUtils::min_difficulty);
+    else
+        difficulty = chainActive.Tip()->nDifficulty;
+
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("blocks",           (int)chainActive.Height()));
     obj.push_back(Pair("currentblockweight", (uint64_t)nLastBlockWeight));
     obj.push_back(Pair("currentblocktx",   (uint64_t)nLastBlockTx));
     obj.push_back(Pair("difficulty",       (double)GetDifficulty()));
-    obj.push_back(Pair("networkhashps",    getnetworkhashps(request)));
+    obj.push_back(Pair("generate",         getgenerate()));
+    obj.push_back(Pair("genproclimit",     (int64_t)gArgs.GetArg("-genproclimit", -1)));
+    obj.push_back(Pair("sievesize",        nMiningSieveSize));
+    obj.push_back(Pair("sieveprimes",      nMiningPrimes));
+    obj.push_back(Pair("shift",            nMiningShift));
+    obj.push_back(Pair("primespersec",     getprimespersec(request)));
+    obj.push_back(Pair("testspersec",      (int) dTestsPerSec));
+    obj.push_back(Pair("gapsperday",       powUtils->gaps_per_day(dHashesPerSec, difficulty)));
+    obj.push_back(Pair("networkprimesps",  getnetworkprimesps(request)));
+    obj.push_back(Pair("pooledtx",         (uint64_t)mempool.size()));
+    obj.push_back(Pair("testnet",          TestNet()));
     obj.push_back(Pair("pooledtx",         (uint64_t)mempool.size()));
     obj.push_back(Pair("chain",            Params().NetworkIDString()));
     if (IsDeprecatedRPCEnabled("getmininginfo")) {
@@ -291,6 +508,174 @@ std::string gbt_vb_name(const Consensus::DeploymentPos pos) {
     return s;
 }
 
+static inline void CBlockToCharAry(CBlock* pblock, char* pdata)
+{
+
+    memcpy(pdata,      (void *) &pblock->nVersion,      4);
+    memcpy(pdata +  4, pblock->hashPrevBlock.begin(),  32);
+    memcpy(pdata + 36, pblock->hashMerkleRoot.begin(), 32);
+    memcpy(pdata + 68, (void *) &pblock->nTime,         4);
+    memcpy(pdata + 72, (void *) &pblock->nDifficulty,   8);
+}
+
+// the block 'data' should be block header + shift + add
+#ifdef ENABLE_WALLET
+UniValue getwork(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() > 1)
+        throw runtime_error(
+            "getwork ( \"data\" )\n"
+            "\nIf 'data' is not specified, it returns the formatted hash data to work on.\n"
+            "If 'data' is specified, tries to solve the block and returns true if it was successful.\n"
+            "\nArguments:\n"
+            "1. \"data\"       (string, optional) The hex encoded data to solve\n"
+            "\nResult (when 'data' is not specified):\n"
+            "{\n"
+            "  \"data\" : \"xxxxx\",      (string) The block data\n"
+            "  \"hash\" : \"xxxxx\",      (string) The block hash\n" 
+            "  \"difficulty\" : \"xxxx\"  (numeric) The current difficulty\n"
+            "}\n"
+            "\nResult (when 'data' is specified):\n"
+            "true|false       (boolean) If solving the block specified in the 'data' was successfull\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getwork", "")
+            + HelpExampleRpc("getwork", "")
+        );
+
+    CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
+
+    if(!g_connman)
+        throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
+
+    if (g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0)
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Gapcoin is not connected!");
+
+    if (IsInitialBlockDownload())
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Gapcoin is downloading blocks...");
+
+    typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
+    static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
+    static vector<std::unique_ptr<CBlockTemplate>> vNewBlockTemplate;
+
+    CReserveKey reservekey(pwallet);
+    CPubKey pubkey;
+    reservekey.GetReservedKey(pubkey, true);
+    CTxDestination destination = GetDestinationForKey(pubkey, g_address_type);
+    std::shared_ptr<CReserveScript> coinbaseScript = std::make_shared<CReserveScript>();
+    coinbaseScript->reserveScript = GetScriptForDestination(destination);
+
+
+    if (request.params.size() == 0)
+    {
+        GetMainSignals().ScriptForMining(coinbaseScript);
+        
+        // If the keypool is exhausted, no script is returned at all.  Catch this.
+        if (!coinbaseScript)
+            throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, "Error: Keypool ran out, please call keypoolrefill first");
+
+        //throw an error if no script was provided
+        if (coinbaseScript->reserveScript.empty())
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "No coinbase script available (mining requires a wallet)");        
+        
+        // Update block
+        WaitableLock lock(csBestBlock);
+        static unsigned int nTransactionsUpdatedLast;
+        static CBlockIndex* pindexPrev;
+        static int64_t nStart;
+        static std::unique_ptr<CBlockTemplate> pblocktemplate;
+
+        if (pindexPrev != chainActive.Tip() ||
+            (mempool.GetTransactionsUpdated() != nTransactionsUpdatedLast && GetTime() - nStart > 60))
+        {
+            if (pindexPrev != chainActive.Tip())
+            {
+                // Deallocate old blocks since they're obsolete now
+                mapNewBlock.clear();
+                for (std::vector<std::unique_ptr<CBlockTemplate>>::size_type i=0;i!=vNewBlockTemplate.size();i++)
+				{
+                    vNewBlockTemplate[i].reset();
+				}
+                vNewBlockTemplate.clear();
+            }
+
+            // Clear pindexPrev so future getworks make a new block, despite any failures from here on
+            pindexPrev = NULL;
+
+            // Store the pindexBest used before CreateNewBlock, to avoid races
+            nTransactionsUpdatedLast = mempool.GetTransactionsUpdated();
+            CBlockIndex* pindexPrevNew = chainActive.Tip();
+            nStart = GetTime();
+
+            // Create new block
+            pblocktemplate = BlockAssembler(Params()).CreateNewBlock(coinbaseScript->reserveScript);
+            if (!pblocktemplate)
+                throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
+            vNewBlockTemplate.push_back(std::move(pblocktemplate));
+
+            // Need to update only after we know CreateNewBlock succeeded
+            pindexPrev = pindexPrevNew;
+        }
+
+        CBlock* pblock = &(vNewBlockTemplate.back()->block); // pointer for convenience
+
+        // Update nTime
+        UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
+        pblock->nNonce = 0;
+
+        // Update nExtraNonce
+        static unsigned int nExtraNonce = 0;
+        IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+
+        // Save
+        mapNewBlock[pblock->hashMerkleRoot] = make_pair(pblock, pblock->vtx[0]->vin[0].scriptSig);
+
+        char pdata[80];
+        CBlockToCharAry(pblock, pdata);
+
+        UniValue result(UniValue::VOBJ);
+        result.push_back(Pair("data",         HexStr(BEGIN(pdata), END(pdata))));
+        result.push_back(Pair("hash",         pblock->GetHash().GetHex()));
+        result.push_back(Pair("difficulty",   pblock->nDifficulty));
+        return result;
+    }
+    else
+    {
+        // Parse parameters
+        vector<unsigned char> vchData = ParseHex(request.params[0].get_str());
+
+        // min size block header + shift (2 Byte) + adder (1 Byte)
+
+        if (vchData.size() <= 86)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter");
+        CBlock* pdata = (CBlock*)&vchData[0];
+
+        // Get saved block
+        if (!mapNewBlock.count(pdata->hashMerkleRoot))
+            return false;
+
+        CBlock* pblock= mapNewBlock[pdata->hashMerkleRoot].first;
+
+        // save adder
+        pblock->nAdd.clear();
+        for (unsigned int i = 86; i < vchData.size(); i++) {
+            pblock->nAdd.push_back(vchData[i]);
+        }
+
+        pblock->nTime  = pdata->nTime;
+        pblock->nNonce = pdata->nNonce;
+        pblock->nShift = pdata->nShift;
+
+        CMutableTransaction txCoinbase(*pblock->vtx[0]);
+        txCoinbase.vin[0].scriptSig = mapNewBlock[pdata->hashMerkleRoot].second;
+        pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
+        pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+
+        assert(pwallet != NULL);
+        return CheckWork(pblock, coinbaseScript);
+    }
+}
+#endif
+
 UniValue getblocktemplate(const JSONRPCRequest& request)
 {
     if (request.fHelp || request.params.size() > 1)
@@ -361,7 +746,7 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
             "  \"sizelimit\" : n,                  (numeric) limit of block size\n"
             "  \"weightlimit\" : n,                (numeric) limit of block weight\n"
             "  \"curtime\" : ttt,                  (numeric) current timestamp in seconds since epoch (Jan 1 1970 GMT)\n"
-            "  \"bits\" : \"xxxxxxxx\",              (string) compressed target of next block\n"
+            "  \"difficulty\" : \"xxxxxxxx\",              (string) target of next block\n"
             "  \"height\" : n                      (numeric) The height of the next block\n"
             "}\n"
 
@@ -583,7 +968,7 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
     UniValue aux(UniValue::VOBJ);
     aux.push_back(Pair("flags", HexStr(COINBASE_FLAGS.begin(), COINBASE_FLAGS.end())));
 
-    arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
+    arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nDifficulty);
 
     UniValue aMutable(UniValue::VARR);
     aMutable.push_back("time");
@@ -671,7 +1056,8 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
         result.push_back(Pair("weightlimit", (int64_t)MAX_BLOCK_WEIGHT));
     }
     result.push_back(Pair("curtime", pblock->GetBlockTime()));
-    result.push_back(Pair("bits", strprintf("%08x", pblock->nBits)));
+    // result.push_back(Pair("bits", strprintf("%08x", pblock->nBits)));
+    result.push_back(Pair("difficulty", HexBits(pblock->nDifficulty)));
     result.push_back(Pair("height", (int64_t)(pindexPrev->nHeight+1)));
 
     if (!pblocktemplate->vchCoinbaseCommitment.empty() && fSupportsSegwit) {
@@ -983,7 +1369,12 @@ static const CRPCCommand commands[] =
     { "mining",             "getblocktemplate",       &getblocktemplate,       {"template_request"} },
     { "mining",             "submitblock",            &submitblock,            {"hexdata","dummy"} },
 
-
+#if ENABLE_WALLET
+    /* Coin generation */
+    { "generating",         "getwork",                &getwork,                {"data"} },
+    { "generating",         "getgenerate",            &getgenerate,            {}  },
+    { "generating",         "setgenerate",            &setgenerate,            {"generate", "genproclimit"}  },
+#endif
     { "generating",         "generatetoaddress",      &generatetoaddress,      {"nblocks","address","maxtries"} },
 
     { "util",               "estimatefee",            &estimatefee,            {"nblocks"} },

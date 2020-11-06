@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -3121,6 +3122,30 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     return DB_LOAD_OK;
 }
 
+bool GetTxMessage(CTransactionRef txref, std::string &msg)
+{
+    for (const CTxOut& txout : txref->vout) {
+
+        if ( 0 != txout.nValue )
+           continue;
+
+        txnouttype which_type;
+        std::vector<std::vector<unsigned char>> solutions_data;
+
+        if (!Solver(txout.scriptPubKey, which_type, solutions_data))
+            return false;
+
+        if (which_type == TX_NULL_DATA)
+        {
+            std::string str(txout.scriptPubKey.begin(), txout.scriptPubKey.end());
+            msg = str;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 DBErrors CWallet::ZapSelectTx(std::vector<uint256>& vHashIn, std::vector<uint256>& vHashOut)
 {
     AssertLockHeld(cs_wallet); // mapWallet
@@ -4140,7 +4165,7 @@ int CMerkleTx::GetBlocksToMaturity() const
 {
     if (!IsCoinBase())
         return 0;
-    return std::max(0, (COINBASE_MATURITY+1) - GetDepthInMainChain());
+    return std::max(0, (Params().GetConsensus().nCoinbaseMaturity+1) - GetDepthInMainChain());
 }
 
 

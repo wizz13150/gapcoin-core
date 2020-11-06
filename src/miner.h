@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,6 +18,7 @@
 class CBlockIndex;
 class CChainParams;
 class CScript;
+class CWallet;
 
 namespace Consensus { struct Params; };
 
@@ -195,5 +197,15 @@ private:
 /** Modify the extranonce in a block */
 void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
+bool CheckWork(const CBlock* pblock, std::shared_ptr<CReserveScript> coinbase_script);
 
+extern double dTestsPerSec;
+extern double dHashesPerSec;
+extern bool isMining;
+extern int64_t nHPSTimerStart;
+extern uint64_t nMiningSieveSize;
+extern uint64_t nMiningPrimes;
+extern uint16_t nMiningShift;
+
+int GenerateGapcoins(bool fGenerate, int nThreads, const CChainParams& chainparams);
 #endif // BITCOIN_MINER_H

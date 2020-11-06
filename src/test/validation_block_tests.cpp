@@ -58,6 +58,11 @@ std::shared_ptr<CBlock> Block(const uint256& prev_hash)
     auto pblock = std::make_shared<CBlock>(ptemplate->block);
     pblock->hashPrevBlock = prev_hash;
     pblock->nTime = ++time;
+    pblock->nDifficulty = PoWUtils::min_test_difficulty;
+    pblock->nShift = 20;
+    uint8_t nAdd[]      = { 25, 1 };
+    pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
+    pblock->vtx.resize(1);
 
     CMutableTransaction txCoinbase(*pblock->vtx[0]);
     txCoinbase.vout.resize(1);
@@ -71,7 +76,7 @@ std::shared_ptr<CBlock> FinalizeBlock(std::shared_ptr<CBlock> pblock)
 {
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 
-    while (!CheckProofOfWork(pblock->GetHash(), pblock->nBits, Params().GetConsensus())) {
+    while (!CheckProofOfWork(pblock->GetHash(), pblock->nShift, &pblock->nAdd, pblock->nDifficulty, Params().GetConsensus())) {
         ++(pblock->nNonce);
     }
 

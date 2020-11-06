@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2020 The Gapcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +14,16 @@
 
 #include <memory>
 #include <vector>
+
+#define MAINNETGENESISHASH "e798f3ae4f57adcf25740fe43100d95ec4fd5d43a1568bc89e2b25df89ff6cb0"
+#define MERKLETREEROOTHASH "261010cfad2ae26a355e56c2551ea2cc05549df11db7f40db7c2b9e3b40e1194"
+#define MAINNETNONCE 13370
+#define TESTNETGENESISHASH "cee5f695d016eda5137a820588ea1891eb107bb94daccff819849507e5bb17cc"
+#define TESTNETMERKLETREEROOTHASH "261010cfad2ae26a355e56c2551ea2cc05549df11db7f40db7c2b9e3b40e1194"
+#define TESTNETNONCE 1
+#define REGTESTGENESISHASH "e798f3ae4f57adcf25740fe43100d95ec4fd5d43a1568bc89e2b25df89ff6cb0"
+#define REGTESTNONCE 2
+#define GENESIS_TIME 1413914400
 
 struct SeedSpec6 {
     uint8_t addr[16];
@@ -44,9 +55,10 @@ public:
     enum Base58Type {
         PUBKEY_ADDRESS,
         SCRIPT_ADDRESS,
-        SECRET_KEY,
-        EXT_PUBLIC_KEY,
-        EXT_SECRET_KEY,
+        SECRET_KEY,     // BIP16
+        EXT_PUBLIC_KEY, // BIP32
+        EXT_SECRET_KEY, // BIP32
+        EXT_COIN_TYPE,  // BIP44
 
         MAX_BASE58_TYPES
     };
@@ -55,6 +67,8 @@ public:
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
     int GetDefaultPort() const { return nDefaultPort; }
 
+    /** Make miner wait to have peers to avoid wasting work */
+    bool MiningRequiresPeers() const {return fMiningRequiresPeers; }
     const CBlock& GenesisBlock() const { return genesis; }
     /** Default value for -checkmempool and -checkblockindex argument */
     bool DefaultConsistencyChecks() const { return fDefaultConsistencyChecks; }
@@ -89,6 +103,7 @@ protected:
     bool fDefaultConsistencyChecks;
     bool fRequireStandard;
     bool fMineBlocksOnDemand;
+    bool fMiningRequiresPeers;
     CCheckpointData checkpointData;
     ChainTxData chainTxData;
 };
