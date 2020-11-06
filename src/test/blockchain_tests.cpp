@@ -56,37 +56,22 @@ void TestDifficulty(uint32_t nbits, double expected_difficulty)
 
 BOOST_FIXTURE_TEST_SUITE(blockchain_difficulty_tests, BasicTestingSetup)
 
-BOOST_AUTO_TEST_CASE(get_difficulty_for_very_low_target)
+BOOST_AUTO_TEST_CASE(get_difficulty_for_arbitrary_target)
 {
-    TestDifficulty(0x1f111111, 0.000001);
+    TestDifficulty(0x15690d0d64b3770, 342.565687);
 }
 
-BOOST_AUTO_TEST_CASE(get_difficulty_for_low_target)
+BOOST_AUTO_TEST_CASE(get_min_difficulty)
 {
-    TestDifficulty(0x1ef88f6f, 0.000016);
+    TestDifficulty(0x10000000000000, 16.0);
 }
 
-BOOST_AUTO_TEST_CASE(get_difficulty_for_mid_target)
-{
-    TestDifficulty(0x1df88f6f, 0.004023);
-}
-
-BOOST_AUTO_TEST_CASE(get_difficulty_for_high_target)
-{
-    TestDifficulty(0x1cf88f6f, 1.029916);
-}
-
-BOOST_AUTO_TEST_CASE(get_difficulty_for_very_high_target)
-{
-    TestDifficulty(0x12345678, 5913134931067755359633408.0);
-}
-
-// Verify that difficulty is 1.0 for an empty chain.
+// Verify that difficulty is 16.0 for an empty chain.
 BOOST_AUTO_TEST_CASE(get_difficulty_for_null_tip)
 {
     CChain chain;
     double difficulty = GetDifficulty(chain, nullptr);
-    RejectDifficultyMismatch(difficulty, 1.0);
+    RejectDifficultyMismatch(difficulty, 16.0);
 }
 
 /* Verify that if difficulty is based upon the block index

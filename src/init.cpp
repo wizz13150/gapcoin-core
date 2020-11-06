@@ -526,7 +526,7 @@ std::string HelpMessage(HelpMessageMode mode)
 std::string LicenseInfo()
 {
     const std::string URL_SOURCE_CODE = "<https://github.com/gapcoin-project/gapcoin>";
-    const std::string URL_WEBSITE = "<https://www.gapcoin.club>";
+    const std::string URL_WEBSITE = "<https://gapcoin-project.github.io/>";
 
     return CopyrightHolders(strprintf(_("Copyright (C) %i-%i"), 2009, COPYRIGHT_YEAR) + " ") + "\n" +
            "\n" +

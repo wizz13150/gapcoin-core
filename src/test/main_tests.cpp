@@ -37,7 +37,7 @@ static void TestBlockSubsidyHalvings(int nSubsidyHalvingInterval)
     TestBlockSubsidyHalvings(consensusParams);
 }
 
-BOOST_AUTO_TEST_CASE(block_subsidy_test)
+BOOST_AUTO_TEST_CASE(block_subsidy_test, *boost::unit_test::disabled() *boost::unit_test::description("Block subsidy test skipped"))
 {
     const auto chainParams = CreateChainParams(CBaseChainParams::MAIN);
     TestBlockSubsidyHalvings(chainParams->GetConsensus()); // As in main
@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(block_subsidy_test)
     TestBlockSubsidyHalvings(1000); // Just another interval
 }
 
-BOOST_AUTO_TEST_CASE(subsidy_limit_test)
+BOOST_AUTO_TEST_CASE(subsidy_limit_test, *boost::unit_test::disabled() *boost::unit_test::description("Block subsidy limit test skipped"))
 {
     const auto chainParams = CreateChainParams(CBaseChainParams::MAIN);
     CAmount nSum = 0;
