@@ -12,18 +12,18 @@
 . /etc/init.d/functions
 
 # you can override defaults in /etc/sysconfig/bitcoind, see below
-if [ -f /etc/sysconfig/bitcoind ]; then
-        . /etc/sysconfig/bitcoind
+if [ -f /etc/sysconfig/gapcoind ]; then
+        . /etc/sysconfig/gapcoind
 fi
 
 RETVAL=0
 
-prog=bitcoind
+prog=gapcoind
 # you can override the lockfile via BITCOIND_LOCKFILE in /etc/sysconfig/bitcoind
-lockfile=${BITCOIND_LOCKFILE-/var/lock/subsys/bitcoind}
+lockfile=${BITCOIND_LOCKFILE-/var/lock/subsys/gapcoind}
 
 # bitcoind defaults to /usr/bin/bitcoind, override with BITCOIND_BIN
-bitcoind=${BITCOIND_BIN-/usr/bin/bitcoind}
+bitcoind=${BITCOIND_BIN-/usr/bin/gapcoind}
 
 # bitcoind opts default to -disablewallet, override with BITCOIND_OPTS
 bitcoind_opts=${BITCOIND_OPTS--disablewallet}

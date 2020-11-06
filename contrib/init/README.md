@@ -1,11 +1,11 @@
 Sample configuration files for:
 ```
-SystemD: bitcoind.service
-Upstart: bitcoind.conf
-OpenRC:  bitcoind.openrc
-         bitcoind.openrcconf
-CentOS:  bitcoind.init
-OS X:    org.bitcoin.bitcoind.plist
+SystemD: gapcoind.service
+Upstart: gapcoind.conf
+OpenRC:  gapcoind.openrc
+         gapcoind.openrcconf
+CentOS:  gapcoind.init
+OS X:    org.gapcoin.gapcoind.plist
 ```
 have been made available to assist packagers in creating node packages here.
 

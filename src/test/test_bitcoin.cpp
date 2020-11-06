@@ -71,7 +71,7 @@ TestingSetup::TestingSetup(const std::string& chainName) : BasicTestingSetup(cha
 
         RegisterAllCoreRPCCommands(tableRPC);
         ClearDatadirCache();
-        pathTemp = fs::temp_directory_path() / strprintf("test_bitcoin_%lu_%i", (unsigned long)GetTime(), (int)(InsecureRandRange(100000)));
+        pathTemp = fs::temp_directory_path() / strprintf("test_gapcoin_%lu_%i", (unsigned long)GetTime(), (int)(InsecureRandRange(100000)));
         fs::create_directories(pathTemp);
         gArgs.ForceSetArg("-datadir", pathTemp.string());
 
@@ -139,11 +139,16 @@ TestChain100Setup::TestChain100Setup() : TestingSetup(CBaseChainParams::REGTEST)
 CBlock
 TestChain100Setup::CreateAndProcessBlock(const std::vector<CMutableTransaction>& txns, const CScript& scriptPubKey)
 {
+    std::cout << "CreateAndProcessBlock" << std::endl;
     const CChainParams& chainparams = Params();
     std::unique_ptr<CBlockTemplate> pblocktemplate = BlockAssembler(chainparams).CreateNewBlock(scriptPubKey);
     CBlock& block = pblocktemplate->block;
 
     // Replace mempool-selected txns with just coinbase plus passed-in txns:
+    block.nDifficulty = PoWUtils::min_test_difficulty;
+    block.nShift = 20;
+    uint8_t nAdd[]      = { 25, 1 };
+    block.nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
     block.vtx.resize(1);
     for (const CMutableTransaction& tx : txns)
         block.vtx.push_back(MakeTransactionRef(tx));
@@ -169,11 +174,13 @@ TestChain100Setup::~TestChain100Setup()
 
 
 CTxMemPoolEntry TestMemPoolEntryHelper::FromTx(const CMutableTransaction &tx) {
+    // std::cout << "TestMemPoolEntryHelper::FromTx CMutableTransaction" << std::endl;
     CTransaction txn(tx);
     return FromTx(txn);
 }
 
 CTxMemPoolEntry TestMemPoolEntryHelper::FromTx(const CTransaction &txn) {
+    // std::cout << "TestMemPoolEntryHelper::FromTx CTransaction" << std::endl;
     return CTxMemPoolEntry(MakeTransactionRef(txn), nFee, nTime, nHeight,
                            spendsCoinbase, sigOpCost, lp);
 }

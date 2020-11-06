@@ -1,20 +1,20 @@
-Bitcoin Core
+Gapcoin Core
 =============
 
 Intro
 -----
-Bitcoin is a free open source peer-to-peer electronic cash system that is
-completely decentralized, without the need for a central server or trusted
-parties.  Users hold the crypto keys to their own money and transact directly
-with each other, with the help of a P2P network to check for double-spending.
+Gapcoin is a free open source project derived from Bitcoin, with
+the goal of providing a long-term energy-efficient crypto-currency.
+Built on the foundation of Bitcoin, innovations such as proof-of-stake
+help further advance the field of crypto-currency.
 
 
 Setup
 -----
-Unpack the files into a directory and run bitcoin-qt.exe.
+Unpack the files into a directory and run gapcoin-qt.exe.
 
-Bitcoin Core is the original Bitcoin client and it builds the backbone of the network.
-However, it downloads and stores the entire history of Bitcoin transactions;
+Gapcoin Core is the original Gapcoin client and it builds the backbone of the network.
+However, it downloads and stores the entire history of Gapcoin transactions;
 depending on the speed of your computer and network connection, the synchronization
 process can take anywhere from a few hours to a day or more.
 

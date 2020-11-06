@@ -52,7 +52,7 @@ BOOST_FIXTURE_TEST_SUITE(DoS_tests, TestingSetup)
 // this logic; this test takes advantage of that protection only
 // being applied to nodes which send headers with sufficient
 // work.
-BOOST_AUTO_TEST_CASE(outbound_slow_chain_eviction)
+BOOST_AUTO_TEST_CASE(outbound_slow_chain_eviction/*, *boost::unit_test::disabled() *boost::unit_test::description("Test skipped")*/)
 {
     std::atomic<bool> interruptDummy(false);
 
@@ -106,7 +106,7 @@ void AddRandomOutboundPeer(std::vector<CNode *> &vNodes, PeerLogicValidation &pe
     CConnmanTest::AddNode(node);
 }
 
-BOOST_AUTO_TEST_CASE(stale_tip_peer_management)
+BOOST_AUTO_TEST_CASE(stale_tip_peer_management/*, *boost::unit_test::disabled() *boost::unit_test::description("Test skipped")*/)
 {
     const Consensus::Params& consensusParams = Params().GetConsensus();
     constexpr int nMaxOutbound = 8;
@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(stale_tip_peer_management)
     CConnmanTest::ClearNodes();
 }
 
-BOOST_AUTO_TEST_CASE(DoS_banning)
+BOOST_AUTO_TEST_CASE(DoS_banning/*, *boost::unit_test::disabled() *boost::unit_test::description("Test skipped")*/)
 {
     std::atomic<bool> interruptDummy(false);
 
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(DoS_banning)
     peerLogic->FinalizeNode(dummyNode2.GetId(), dummy);
 }
 
-BOOST_AUTO_TEST_CASE(DoS_banscore)
+BOOST_AUTO_TEST_CASE(DoS_banscore/*, *boost::unit_test::disabled() *boost::unit_test::description("Test skipped")*/)
 {
     std::atomic<bool> interruptDummy(false);
 
@@ -258,7 +258,7 @@ BOOST_AUTO_TEST_CASE(DoS_banscore)
     peerLogic->FinalizeNode(dummyNode1.GetId(), dummy);
 }
 
-BOOST_AUTO_TEST_CASE(DoS_bantime)
+BOOST_AUTO_TEST_CASE(DoS_bantime/*, *boost::unit_test::disabled() *boost::unit_test::description("Test skipped")*/)
 {
     std::atomic<bool> interruptDummy(false);
 
@@ -301,7 +301,7 @@ CTransactionRef RandomOrphan()
     return it->second.tx;
 }
 
-BOOST_AUTO_TEST_CASE(DoS_mapOrphans)
+BOOST_AUTO_TEST_CASE(DoS_mapOrphans/*, *boost::unit_test::disabled() *boost::unit_test::description("Test skipped")*/)
 {
     CKey key;
     key.MakeNewKey(true);
