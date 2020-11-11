@@ -173,7 +173,7 @@ public:
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,97);
         base58Prefixes[EXT_PUBLIC_KEY] = {0x03, 0x3C, 0x0D, 0xF8}; // gpxp
         base58Prefixes[EXT_SECRET_KEY] = {0x03, 0x3C, 0x0E, 0x22}; // gpxv
-        base58Prefixes[EXT_COIN_TYPE]  = {0x80, 0x00, 0x00, 0x15}; // BIP44 coin type is '15'
+        base58Prefixes[EXT_COIN_TYPE]  = {0x80, 0x00, 0x00, 0x0f}; // BIP44 coin type is '15'
 
         bech32_hrp = "gp";
 
