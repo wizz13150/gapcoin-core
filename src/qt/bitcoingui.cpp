@@ -943,12 +943,12 @@ void BitcoinGUI::setMining(bool mining, double hashrate)
     if (mining)
     {
         labelMiningStatusIcon->setPixmap(platformStyle->SingleColorIcon(":/icons/mining_active").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        labelMiningStatusIcon->setToolTip(tr("Mining {{coinname}} at %1 primes per second").arg(hashrate));
+        labelMiningStatusIcon->setToolTip(tr("Mining Gapcoin at %1 primes per second").arg(hashrate));
     }
     else
     {
         labelMiningStatusIcon->setPixmap(platformStyle->SingleColorIcon(":/icons/mining_inactive").pixmap(STATUSBAR_ICONSIZE, STATUSBAR_ICONSIZE));
-        labelMiningStatusIcon->setToolTip(tr("Not mining {{coinname}}"));
+        labelMiningStatusIcon->setToolTip(tr("Not mining Gapcoin"));
     }
     labelMiningStatusIcon->setEnabled(mining);
 }
