@@ -500,8 +500,6 @@ void UpdateMempoolForReorg(DisconnectedBlockTransactions &disconnectpool, bool f
             mempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
             // Changes to mempool should also be made to Dandelion stempool
             stempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
-            // Changes to mempool should also be made to Dandelion stempool
-            stempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
         } else if (mempool.exists((*it)->GetHash())) {
             vHashUpdate.push_back((*it)->GetHash());
         }
