@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chain.h>
+#include <pow.h>
 #include <util.h>
 #include <rpc/mining.h>
 #include <validation.h>
@@ -145,6 +146,11 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
+
+    if (TestNet()) {
+        QPixmap testnet_pixmap (":/icons/logo_testnet");
+        ui->labelMainLogo->setPixmap(testnet_pixmap);
+    }
 
     if (gArgs.GetBoolArg("-chart", DEFAULT_CHARTPLOTTING))
     {
