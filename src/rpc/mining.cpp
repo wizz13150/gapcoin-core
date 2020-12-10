@@ -268,7 +268,7 @@ UniValue getprimespersec(const JSONRPCRequest& request)
             + HelpExampleRpc("getprimespersec", "")
         );
 
-    return (uint64_t)nHashesPerSec;
+    return (uint64_t)dHashesPerSec;
 }
 
 
