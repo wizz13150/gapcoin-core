@@ -3522,6 +3522,56 @@ UniValue rescanblockchain(const JSONRPCRequest& request)
     return response;
 }
 
+// peercoin: display key pair from hex private key
+UniValue showkeypair(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 1)
+        throw std::runtime_error(
+            "showkeypair <hexprivkey>\n"
+            "Display a public/private key pair with given hex private key.\n"
+            "<hexprivkey> is the private key in hex form.\n");
+
+    std::string strPrivKey = request.params[0].get_str();
+
+    CBitcoinSecret vchSecret;
+    bool fGood = vchSecret.SetString(strPrivKey);
+
+    if (!fGood) throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key encoding");
+
+    CKey key = vchSecret.GetKey();
+    if (!key.IsValid()) throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Private key outside allowed range");
+
+    CPubKey pubkey = key.GetPubKey();
+    assert(key.VerifyPubKey(pubkey));
+
+    // Test signing some message
+    std::string strMsg = "Test sign by showkeypair";
+    std::vector<unsigned char> vchMsg(strMsg.begin(), strMsg.end());
+    std::vector<unsigned char> vchSig;
+    if (!key.Sign(Hash(vchMsg.begin(), vchMsg.end()), vchSig))
+        throw std::runtime_error(
+            "Failed to sign using the key, bad key?\n");
+
+    std::vector<std::string> addresstypes = {"legacy", "segwit", "bech32"};
+
+    std::vector<CTxDestination> dests = GetAllDestinationsForKey(pubkey);
+    UniValue addresses(UniValue::VOBJ);
+    int i = 0;
+    for (const auto& dest : GetAllDestinationsForKey(pubkey)) {
+        addresses.push_back(Pair(strprintf("%s", addresstypes[i]), EncodeDestination(dest)));
+        i++;
+    }
+
+    UniValue result(UniValue::VOBJ);
+    CPrivKey vchPrivKey = key.GetPrivKey();
+    result.push_back(Pair("addresses", addresses));
+    result.push_back(Pair("privkey", CBitcoinSecret(key).ToString()));
+    result.push_back(Pair("public key", HexStr(pubkey)));
+    result.push_back(Pair("private key", HexStr(key)));
+
+    return result;
+}
+
 extern UniValue abortrescan(const JSONRPCRequest& request); // in rpcdump.cpp
 extern UniValue dumpprivkey(const JSONRPCRequest& request); // in rpcdump.cpp
 extern UniValue makekeypair(const JSONRPCRequest& request); // in rpcdump.cpp
@@ -3567,6 +3617,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "importprunedfunds",        &importprunedfunds,        {"rawtransaction","txoutproof"} },
     { "wallet",             "importpubkey",             &importpubkey,             {"pubkey","label","rescan"} },
     { "wallet",             "makekeypair",              &makekeypair,              {"uncompressed"} },
+    { "wallet",             "showkeypair",              &showkeypair,              {"hexprivkey"} },
     { "wallet",             "keypoolrefill",            &keypoolrefill,            {"newsize"} },
     { "wallet",             "listaccounts",             &listaccounts,             {"minconf","include_watchonly"} },
     { "wallet",             "listaddressgroupings",     &listaddressgroupings,     {} },
