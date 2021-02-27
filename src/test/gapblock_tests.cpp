@@ -221,8 +221,8 @@ BOOST_FIXTURE_TEST_SUITE(gapblock_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(one)
 {
-    BOOST_TEST_MESSAGE(strprintf("nMiningSieveSize=%s, nMiningPrimes=%s, nMiningShift=%s.", nMiningSieveSize, nMiningPrimes, nMiningShift));
-    GapcoinMiner();
+    // BOOST_TEST_MESSAGE(strprintf("nMiningSieveSize=%s, nMiningPrimes=%s, nMiningShift=%s.", nMiningSieveSize, nMiningPrimes, nMiningShift));
+    // GapcoinMiner();
     // BOOST_TEST_MESSAGE(strprintf());
 }
 
