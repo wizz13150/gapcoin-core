@@ -848,7 +848,7 @@ UniValue getblock(const JSONRPCRequest& request)
     if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
         throw JSONRPCError(RPC_MISC_ERROR, "Block not available (pruned data)");
 
-    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus(), false))
         // Block not found on disk. This could be because we have the block
         // header in our index but don't have the block (for example if a
         // non-whitelisted node sends us an unrequested long chain of valid
@@ -1727,7 +1727,7 @@ UniValue listprimerecords(const JSONRPCRequest& request)
         bnEnd.setvch(vEnd);
 
         CBlock block;
-        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus(), false)) {
 
             UniValue entry(UniValue::VOBJ);
 
@@ -1820,7 +1820,7 @@ UniValue listbestprimes(const JSONRPCRequest& request)
         bnEnd.setvch(vEnd);
 
         CBlock block;
-        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus())) {
+        if (ReadBlockFromDisk(block, pindex, Params().GetConsensus(), false)) {
 
             UniValue entry(UniValue::VOBJ);
             entry.push_back(Pair("time", DateTimeStrFormat("%Y-%m-%d %H:%M:%S UTC", pindex->GetBlockTime()).c_str()));
@@ -1884,7 +1884,7 @@ static std::string blockgraph(const CBlockIndex* pblockindex)
     UniValue data;
     {
         LOCK(cs_main);
-        ReadBlockFromDisk(block, pblockindex, consensus_params);
+        ReadBlockFromDisk(block, pblockindex, consensus_params, false);
         data = blockToJSON(block, pblockindex, true);
     }
 
@@ -2038,7 +2038,7 @@ UniValue renderblock(const JSONRPCRequest& request)
     if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
         throw JSONRPCError(RPC_MISC_ERROR, "Block not available (pruned data)");
 
-    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus(), false))
         // Block not found on disk. This could be because we have the block
         // header in our index but don't have the block (for example if a
         // non-whitelisted node sends us an unrequested long chain of valid
@@ -2080,7 +2080,7 @@ UniValue renderblockhash(const JSONRPCRequest& request)
     if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
         throw JSONRPCError(RPC_MISC_ERROR, "Block not available (pruned data)");
 
-    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
+    if (!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus(), false))
         // Block not found on disk. This could be because we have the block
         // header in our index but don't have the block (for example if a
         // non-whitelisted node sends us an unrequested long chain of valid
