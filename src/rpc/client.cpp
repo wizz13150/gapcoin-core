@@ -154,6 +154,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "renderblock", 0, "block" },
     { "dumptriples", 1, "start" },
     { "dumptriples", 2, "end" },
+    { "nicely", 1, "start" },
+    { "nicely", 2, "end" },
+    { "nicely", 3, "merit" },
     { "getnetworkhashps", 0, "lookup"},
     { "getnetworkhashps", 1, "height"},
 };

@@ -2003,6 +2003,33 @@ static std::string blockgraph(const CBlockIndex* pblockindex)
     return stream.str();
 }
 
+static std::string formatnicely(const CBlockIndex* pblockindex, double nMinMerit)
+{
+
+    std::stringstream stream;
+
+    CBlock block;
+    auto& consensus_params = Params().GetConsensus();
+    UniValue data;
+    {
+        LOCK(cs_main);
+        ReadBlockFromDisk(block, pblockindex, consensus_params, false);
+        data = blockToJSON(block, pblockindex, true);
+    }
+
+    if (data["merit"].get_real() > nMinMerit) {
+        stream << data["gaplen"].getValStr() << ",";
+        stream << "0,C,?,?,Gapcoin,";
+        stream << DateTimeStrFormat("%Y", std::stoll(data["time"].getValStr())) << ",";
+        stream << fixed << setprecision(4)<< data["merit"].get_real() << ",";
+        stream << data["gapstart"].getValStr().length() << ",";
+        stream << data["gapstart"].getValStr();
+        stream << std::endl;
+    }
+    return stream.str();
+}
+
+
 UniValue renderblock(const JSONRPCRequest& request)
 {
     if (request.fHelp || request.params.size() > 1)
@@ -2093,7 +2120,6 @@ UniValue renderblockhash(const JSONRPCRequest& request)
     return result;
 }
 
-
 UniValue dumptriples(const JSONRPCRequest& request)
 {
     if (request.fHelp || request.params.size() < 1 || request.params.size() > 3)
@@ -2157,6 +2183,71 @@ UniValue dumptriples(const JSONRPCRequest& request)
     return reply;
 }
 
+UniValue nicely(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 3 || request.params.size() > 4)
+        throw std::runtime_error(
+            "nicely filename startblock endblock merit\n"
+            "\nCreates a file of T.R.Nicely-format gap records in destination, which can be a directory or a path with filename.\n"
+            "\nArguments:\n"
+            "1. filename      (string) Filename with path (either absolute or relative)\n"
+            "2. startblock    (integer) First block number to dump.\n"
+            "3. endblock      (integer) Last block number to dump.\n"
+            "4. merit         (float) Minimum merit (default 20.0).\n"
+            );
+
+    fs::path filepath = request.params[0].get_str();
+    filepath = fs::absolute(filepath);
+
+    int nStartBlock = request.params[1].get_int();
+
+    int nEndBlock = request.params[2].get_int();
+
+    double nMinMerit = 20.0;
+
+    if (request.params.size() > 3) {
+        nMinMerit = request.params[3].get_real();
+    }
+
+    try {
+
+        boost::filesystem::path filepath = request.params[0].get_str();
+        filepath = boost::filesystem::absolute(filepath);
+
+        /* Prevent arbitrary files from being overwritten. There have been reports
+         * that users have overwritten wallet files this way:
+         * https://github.com/bitcoin/bitcoin/issues/9934
+         * It may also avoid other security issues.
+         */
+        if (boost::filesystem::exists(filepath)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, filepath.string() + " already exists. If you are sure this is what you want, move it out of the way first");
+        }
+
+        std::ofstream file;
+        file.open(filepath.string().c_str());
+        if (!file.is_open())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
+
+        CBlockIndex* pblockindex = chainActive[nStartBlock];
+
+        while (pblockindex->nHeight < nEndBlock)
+        {
+            file << formatnicely(pblockindex, nMinMerit);
+            pblockindex = chainActive.Next(pblockindex);
+        }
+
+        file.close();
+
+    } catch(const boost::filesystem::filesystem_error &e) {
+        throw JSONRPCError(-1, "Error: Gap records dump failed!");
+    }
+
+    UniValue reply(UniValue::VOBJ);
+    reply.pushKV("filename", filepath.string());
+
+    return reply;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         argNames
   //  --------------------- ------------------------  -----------------------  ----------
@@ -2193,6 +2284,7 @@ static const CRPCCommand commands[] =
     { "hidden",             "waitforblockheight",     &waitforblockheight,     {"height","timeout"} },
     { "hidden",             "syncwithvalidationinterfacequeue", &syncwithvalidationinterfacequeue, {} },
     { "hidden",             "dumptriples",            &dumptriples,            {"filename", "start", "end"} },
+    { "hidden",             "nicely",                 &nicely,                 {"filename", "start", "end", "merit"} },
     { "hidden",             "renderblock",            &renderblock,            {"block"} },
     { "hidden",             "renderblockhash",        &renderblockhash,        {"blockhash"} },
 };
