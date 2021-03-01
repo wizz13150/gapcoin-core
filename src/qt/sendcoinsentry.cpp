@@ -432,7 +432,7 @@ void SendCoinsEntry::setAddress(const QString &address)
 
 void SendCoinsEntry::setInscription(const QString &inscription)
 {
-    ui->inscriptionText->setText("ni://example.org/sha-256;5AbXdpz5DcaYXCh9l3eI9ruBosiL5XDU3rxBbBaUO70");
+    ui->inscriptionText->setText(inscription);
 }
 
 void SendCoinsEntry::setAmount(const CAmount &amount)
