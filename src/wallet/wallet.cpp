@@ -1726,7 +1726,7 @@ bool CWalletTx::RelayWalletTransaction(CConnman* connman)
         if (InMempool() || AcceptToMemoryPool(maxTxFee, state)) {
             LogPrintf("Relaying wtx %s\n", GetHash().ToString());
             if (connman) {
-                if (gArgs.GetBoolArg("-disable-dandelion", DEFAULT_DISABLE_DANDELION)) {
+                if (gArgs.GetBoolArg("-disabledandelion", DEFAULT_DISABLE_DANDELION)) {
                     int64_t nCurrTime = GetTimeMicros();
                     int64_t nEmbargo = 1000000*DANDELION_EMBARGO_MINIMUM+PoissonNextSend(nCurrTime, DANDELION_EMBARGO_AVG_ADD);
                     connman->insertDandelionEmbargo(GetHash(),nEmbargo);
@@ -4191,7 +4191,7 @@ bool CWalletTx::AcceptToMemoryPool(const CAmount& nAbsurdFee, CValidationState& 
     // because we think that the transaction they just generated's change is
     // unavailable as we're not yet aware its in mempool.
     bool ret;
-    if (gArgs.GetBoolArg("-disable-dandelion", DEFAULT_DISABLE_DANDELION)) {
+    if (gArgs.GetBoolArg("-disabledandelion", DEFAULT_DISABLE_DANDELION)) {
         ret = ::AcceptToMemoryPool(stempool, state, tx, nullptr /* pfMissingInputs */,
                                     nullptr /* plTxnReplaced */, false /* bypass_limits */, nAbsurdFee);
     } else {
