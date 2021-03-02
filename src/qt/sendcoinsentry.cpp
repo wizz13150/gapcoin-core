@@ -240,8 +240,9 @@ bool SendCoinsEntry::validate()
 
     if (!model->validateAddress(ui->payTo->text()))
     {
-        ui->payTo->setValid(false);
         retval = false;
+        ui->payTo->setValid(retval);
+        return retval;
     }
 
     if (!ui->payAmount->validate())
@@ -265,6 +266,19 @@ bool SendCoinsEntry::validate()
     if (!ui->inscriptionText->text().isEmpty())
     {
         retval = false;
+
+        CTxDestination destination = DecodeDestination(ui->payTo->text().toStdString());
+        const CKeyID* keyID = boost::get<CKeyID>(&destination);
+        CKey key;
+        if (!model->getPrivKey(*keyID, key))
+        {
+            QMessageBox::warning(this, tr("NOT SENDING TO SELF"),
+                tr("Inscription field is not blank, you must use an address that you own."),
+                QMessageBox::Ok, QMessageBox::Ok);
+            ui->payTo->setValid(retval);
+            return retval;
+        }
+
         // Check if it is a hex string (produced by clicking "Notarise File")
         if (IsHex(ui->inscriptionText->text().toStdString())) {
             // and is of the correct length
