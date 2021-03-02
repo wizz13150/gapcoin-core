@@ -18,6 +18,13 @@
     <layout class="QHBoxLayout" name="horizontalLayout_1">
      <item>
       <layout class="QGridLayout" name="gridLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="textlabelNumberOfThreads">
+         <property name="text">
+          <string>Number of threads to use:</string>
+         </property>
+        </widget>
+       </item>
        <item row="0" column="1">
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
@@ -103,31 +110,10 @@ border-radius: 4px;
          </item>
         </layout>
        </item>
-       <item row="3" column="0">
-        <widget class="QLabel" name="label_3">
-         <property name="text">
-          <string>Gaps per day:</string>
-         </property>
-        </widget>
-       </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="label_2">
+        <widget class="QLabel" name="textlabelMinerHashRate">
          <property name="text">
           <string>Your hashrate (built-in miner):</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_4">
-         <property name="text">
-          <string>Network hashrate:</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>Number of threads to use:</string>
          </property>
         </widget>
        </item>
@@ -138,10 +124,24 @@ border-radius: 4px;
          </property>
         </widget>
        </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="textlabelNetHashRate">
+         <property name="text">
+          <string>Network hashrate:</string>
+         </property>
+        </widget>
+       </item>
        <item row="2" column="1">
         <widget class="QLabel" name="labelNetHashRate">
          <property name="text">
           <string>?</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="textlabelNextBlock">
+         <property name="text">
+          <string>Gaps per day:</string>
          </property>
         </widget>
        </item>
@@ -156,10 +156,32 @@ border-radius: 4px;
      </item>
      <item>
       <layout class="QGridLayout" name="SieveSettings">
-       <item row="0" column="0">
+       <item row="0" column="0" colspan="2">
+        <widget class="QLabel" name="textlabelMinerSettings">
+         <property name="minimumSize">
+          <size>
+           <width>140</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>140</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font-weight: bold;</string>
+         </property>
+         <property name="text">
+          <string>Miner settings:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
         <widget class="QLabel" name="headershiftLabel">
          <property name="text">
-          <string>Header shift</string>
+          <string>Header shift:</string>
          </property>
          <property name="textFormat">
           <enum>Qt::PlainText</enum>
@@ -169,7 +191,7 @@ border-radius: 4px;
          </property>
         </widget>
        </item>
-       <item row="0" column="1">
+       <item row="1" column="1">
         <widget class="QValidatedLineEdit" name="headershiftValue">
          <property name="minimumSize">
           <size>
@@ -191,7 +213,45 @@ border-radius: 4px;
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
+       <item row="2" column="0">
+        <widget class="QLabel" name="primedigitlabelText">
+         <property name="text">
+          <string>Primedigits:</string>
+         </property>
+         <property name="textFormat">
+          <enum>Qt::PlainText</enum>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLabel" name="primedigitValue">
+         <property name="minimumSize">
+          <size>
+           <width>140</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>140</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="toolTip">
+          <string>The number of digits in the primes being searched</string>
+         </property>
+         <property name="text">
+          <string>85</string>
+         </property>
+         <property name="margin">
+          <number>0</number>
+         </property>
+         <property name="indent">
+          <number>2</number>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
         <widget class="QLabel" name="sievesizelabelText">
          <property name="text">
           <string>Sieve size:</string>
@@ -201,7 +261,7 @@ border-radius: 4px;
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
+       <item row="3" column="1">
         <widget class="QValidatedLineEdit" name="sievesizeValue">
          <property name="minimumSize">
           <size>
@@ -223,14 +283,14 @@ border-radius: 4px;
          </property>
         </widget>
        </item>
-       <item row="2" column="0">
+       <item row="4" column="0">
         <widget class="QLabel" name="sieveprimeslabelText">
          <property name="text">
           <string>Primes in sieve:</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="1">
+       <item row="4" column="1">
         <widget class="QValidatedLineEdit" name="sieveprimesValue">
          <property name="minimumSize">
           <size>
