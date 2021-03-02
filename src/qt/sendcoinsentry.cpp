@@ -287,6 +287,7 @@ bool SendCoinsEntry::validate()
         }
         // Else check if it's a valid TrustyUri
         else if ((ui->inscriptionText->text().startsWith("ni://") && (ui->inscriptionText->text().length() < 127))) {
+            /* TODO Finish regexp checking of TrustyURI format
             std::string s = "ni://example.org/sha-256;5AbXdpz5DcaYXCh9l3eI9ruBosiL5XDU3rxBbBaUO70";
             std::string regex = "(^http.?://)(.*?)([/\\?]{1,})(.*)";
 
@@ -321,7 +322,7 @@ bool SendCoinsEntry::validate()
             }
 
             std::cout << std::endl;
-
+            */
             retval = true;
         }
         ui->inscriptionText->setValid(retval);
