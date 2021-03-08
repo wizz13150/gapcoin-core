@@ -225,6 +225,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nDifficulty    = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nShift         = nMiningShift;
+    pblock->nNonce         = 0;
+    /* FIXME gjh mining - inferred as (and tested to be) redundant, nAdd value is set by PowCore
     if (TestNet())
     {
         uint8_t nAdd[] = { 25, 1 };
@@ -233,9 +235,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
         uint8_t nAdd[] = { 233, 156, 15 };
         pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
     }
-
-    // pblock->vtx[0].vout[0].nValue = nFees + 50; // GetBlockSubsidy(pindexPrev->nHeight+1, GetNextWorkRequired(pindexPrev, pblock), chainparams.GetConsensus());
-    // pblocktemplate->vTxFees[0] = -nFees;
+    */
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     CValidationState state;
