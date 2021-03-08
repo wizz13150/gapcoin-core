@@ -42,6 +42,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+BOOST_FIXTURE_TEST_SUITE(gapblock_tests, TestingSetup)
+
 static PoWUtils *powUtils = new PoWUtils();
 
 //class BlockProcessor : public PoWProcessor {
@@ -161,6 +163,10 @@ void static GapcoinMiner()
     unsigned int nExtraNonce = 0;
     uint256 hashTarget = uint256S("0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
 
+    uint64_t nMiningSieveSize = 1000;
+    uint64_t nMiningPrimes = 1000;
+    uint16_t nMiningShift = 15;
+
     Sieve sieve(NULL, nMiningPrimes, nMiningSieveSize);
     std::cout << "Sieve initialised." << std::endl;
 
@@ -178,14 +184,42 @@ void static GapcoinMiner()
         }
         std::cout << "Template created." << std::endl;
 
+        // std::cout << "pblock" << std::endl;
+        // const std::vector<unsigned char>::size_type Z(pblocktemplate->block.nAdd.size());
+        // std::cout << "{";
+        // for (size_t i=0; i<Z; i++)
+        // {
+        //     std::cout << static_cast<unsigned int>(pblocktemplate->block.nAdd[i]) << ",";
+        // }
+        // std::cout << "}" << std::endl;
+        // std::cout << "shift: " << pblocktemplate->block.nShift << std::endl;
+        // std::cout << "difficulty: " << pblocktemplate->block.nDifficulty << std::endl;
+        // std::cout << "nonce: " << pblocktemplate->block.nNonce << std::endl;
+
         CBlock *pblock = &pblocktemplate->block;
         IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
 
+        pblock->nDifficulty = PoWUtils::min_test_difficulty;
+        uint8_t nAdd[]      = { 25, 1 };
+        pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
+
+        const std::vector<unsigned char>::size_type T(pblock->nAdd.size());
+        std::cout << "pblock" << std::endl;
+        std::cout << "{";
+        for (size_t i=0; i<T; i++)
+        {
+            std::cout << static_cast<unsigned int>(pblock->nAdd[i]) << ",";
+        }
+        std::cout << "}" << std::endl;
+        std::cout << "shift: " << pblock->nShift << std::endl;
+        std::cout << "difficulty: " << pblock->nDifficulty << std::endl;
+        std::cout << "nonce: " << pblock->nNonce << std::endl;
+
         // Search
         BlockProcessor processor(pblock, coinbaseScript);
-        std::cout << "PoW processor initialised." << std::endl;
+        // std::cout << "PoW processor initialised." << std::endl;
         sieve.set_pprocessor(&processor);
-        std::cout << "PoW processor bound to sieve." << std::endl;
+        // std::cout << "PoW processor bound to sieve." << std::endl;
 
         // int64_t nStart = GetTime();
 
@@ -194,19 +228,33 @@ void static GapcoinMiner()
         while (true)
         {
             /* header hash has to be greater than 2^255 - 1 */
-            while ((pblock->GetHash() < hashTarget) || (pblock->GetHash() == hashTarget)) {
+            // std::cout << "pblock->GetHash()" << pblock->GetHash().ToString() << " hashTarget: " << hashTarget << std::endl;
+            while (pblock->GetHash() < hashTarget) {
                 pblock->nNonce += 1;
-                if (pblock->nNonce % 10000 == 0)
+                if (pblock->nNonce % 1000 == 0)
                     std::cout << "pblock->nNonce = " << pblock->nNonce << std::endl;
+
+                uint256 hash = pblock->GetHash();
+                std::vector<uint8_t> vHash(hash.begin(), hash.end());
+
+                PoW pow(&vHash, pblock->nShift, &pblock->nAdd, pblock->nDifficulty);
+                sieve.run_sieve(&pow, NULL);
+                if (pow.valid()) {
+                    // std::cout << "Run with pow processor " << pow.to_s() << std::endl;
+                    break;
+                }
             }
-            std::cout << "pblock->nNonce = " << pblock->nNonce << std::endl;
-
-            uint256 hash = pblock->GetHash();
-            std::vector<uint8_t> vHash(hash.begin(), hash.end());
-
-            PoW pow(&vHash, pblock->nShift, &pblock->nAdd, pblock->nDifficulty);
-            std::cout << "Running with pow processor " << pow.to_s() << std::endl;
-            sieve.run_sieve(&pow, NULL);
+            std::cout << "pblock: " << pblock->ToString() << std::endl;
+            const std::vector<unsigned char>::size_type N(pblock->nAdd.size());
+            std::cout << "{";
+            for (size_t i=0; i<N; i++)
+            {
+                std::cout << static_cast<unsigned int>(pblock->nAdd[i]) << ",";
+            }
+            std::cout << "}" << std::endl;
+            std::cout << "shift: " << pblock->nShift << std::endl;
+            std::cout << "difficulty: " << pblock->nDifficulty << std::endl;
+            std::cout << "nonce: " << pblock->nNonce << std::endl;
         }
     }
     catch (boost::thread_interrupted)
@@ -217,13 +265,11 @@ void static GapcoinMiner()
 }
 
 
-BOOST_FIXTURE_TEST_SUITE(gapblock_tests, BasicTestingSetup)
-
 BOOST_AUTO_TEST_CASE(one)
 {
-    // BOOST_TEST_MESSAGE(strprintf("nMiningSieveSize=%s, nMiningPrimes=%s, nMiningShift=%s.", nMiningSieveSize, nMiningPrimes, nMiningShift));
-    // GapcoinMiner();
-    // BOOST_TEST_MESSAGE(strprintf());
+    BOOST_TEST_MESSAGE(strprintf("nMiningSieveSize=%s, nMiningPrimes=%s, nMiningShift=%s.", nMiningSieveSize, nMiningPrimes, nMiningShift));
+    GapcoinMiner();
+    BOOST_TEST_MESSAGE(strprintf("Done"));
 }
 
 //static CBlock BuildBlockTestCase() {

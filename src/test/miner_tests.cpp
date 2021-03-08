@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <base58.h>
 #include <chainparams.h>
 #include <coins.h>
 #include <consensus/consensus.h>
@@ -12,6 +13,7 @@
 #include <validation.h>
 #include <miner.h>
 #include <policy/policy.h>
+#include <pow.h>
 #include <pubkey.h>
 #include <script/standard.h>
 #include <txmempool.h>
@@ -19,11 +21,43 @@
 #include <util.h>
 #include <utilstrencodings.h>
 
+#include <PoWCore/src/PoW.h>
+#include <PoWCore/src/PoWProcessor.h>
+#include <PoWCore/src/PoWUtils.h>
+#include <PoWCore/src/Sieve.h>
+
 #include <test/test_bitcoin.h>
 
 #include <memory>
 
 #include <boost/test/unit_test.hpp>
+
+class BlockProcessor : public PoWProcessor {
+
+  public:
+
+    BlockProcessor(CBlock *pblock, std::shared_ptr<CReserveScript> coinbase_script) : PoWProcessor() {
+      this->pblock = pblock;
+      this->coinbasescript = coinbase_script;
+    }
+
+    bool process(PoW *pow) {
+      SetThreadPriority(THREAD_PRIORITY_NORMAL);
+
+      pow->get_adder(&pblock->nAdd);
+      bool ret = CheckWork(pblock, coinbasescript);
+
+      SetThreadPriority(THREAD_PRIORITY_LOWEST);
+      return !ret;
+    }
+
+  private:
+
+    CBlock *pblock;
+    std::shared_ptr<CReserveScript> coinbasescript;
+
+};
+
 
 BOOST_FIXTURE_TEST_SUITE(miner_tests, TestingSetup)
 
@@ -82,6 +116,19 @@ struct {
     {2, 0xd351e722}, {1, 0xf4ca48c9}, {1, 0x5b19c670}, {1, 0xa164bf0e},
     {2, 0xbbbeb305}, {2, 0xfe1c810a},
 };
+
+/*
+static
+struct {
+    unsigned char extranonce;
+    uint16_t shift;
+    uint32_t nonce;
+    uint64_t difficulty;
+    std::vector<unsigned char> nadd;
+} blockinfo[] = {
+    {4, 25, 4, 4503599627370496, {{193,135,69,1}}, {2, 25, 355, 4503599627370496, {{53,94,54,1}},
+};
+*/
 
 CBlockIndex CreateBlockIndex(int nHeight)
 {
@@ -206,9 +253,8 @@ void TestPackageSelection(const CChainParams& chainparams, CScript scriptPubKey,
 // NOTE: These tests rely on CreateNewBlock doing its own self-validation!
 BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
 {
-    bool checkblockresult = false;
     // Note that by default, these tests run with size accounting enabled.
-    // BOOST_TEST_MESSAGE("Creating chain params");
+    BOOST_TEST_MESSAGE("Creating chain params");
     const auto chainParams = CreateChainParams(CBaseChainParams::MAIN);
     const CChainParams& chainparams = *chainParams;
     CScript scriptPubKey = CScript() << ParseHex("044588d54931b7de2f9faaa5a3c1fde654114ae51273754e1f3f9720127f8977af6bfaa1f33e22e80e4b83f5269921501b411d254929faf1b10d2174ded28ac59d") << OP_CHECKSIG;
@@ -229,19 +275,31 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
 
     // We can't make transactions until we have inputs
     // Therefore, load 100 blocks :)
-    BOOST_TEST_MESSAGE("Creating 100 blocks.");
+    BOOST_TEST_MESSAGE("Creating 100 blocks.\n");
+    uint64_t nMiningSieveSize = 33554432;
+    uint64_t nMiningPrimes = 900000;
+    uint256 hashTarget = uint256S("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+
     int baseheight = 0;
     std::vector<CTransactionRef> txFirst;
     for (unsigned int i = 0; i < sizeof(blockinfo)/sizeof(*blockinfo); ++i)
     {
+        // std::cout << "Block #" << i << std::endl;
         CBlock *pblock = &pblocktemplate->block; // pointer for convenience
         {
-            LOCK(cs_main);
+            // LOCK(cs_main);
             pblock->nVersion = 1;
-            pblock->nTime = chainActive.Tip()->GetMedianTimePast()+((i+1)*200);
-            pblock->nDifficulty = PoWUtils::min_difficulty;
-            uint8_t nAdd[]      = { 25, 1 };
-            pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
+            // pblock->nTime = chainActive.Tip()->GetMedianTimePast()+((i+1)*200);
+            pblock->nShift = 25;
+            pblock->nTime = chainActive.Tip()->GetMedianTimePast()+1;
+            if (i == 0)
+                pblock->nDifficulty = PoWUtils::min_difficulty;
+            else {
+                CBlockIndex* pindexLast = chainActive.Tip();
+                pblock->nDifficulty = GetNextWorkRequired(pindexLast, pblock, chainparams.GetConsensus());
+            }
+            // uint8_t nAdd[]      = { 233, 156, 15 };
+            // pblock->nAdd.assign(nAdd, nAdd + sizeof(nAdd) / sizeof(uint8_t));
             CMutableTransaction txCoinbase(*pblock->vtx[0]);
             txCoinbase.nVersion = 1;
             txCoinbase.vin[0].scriptSig = CScript();
@@ -255,7 +313,37 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
             if (txFirst.size() < 4)
                 txFirst.push_back(pblock->vtx[0]);
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
-            pblock->nNonce = blockinfo[i].nonce;
+            pblock->nNonce = 0;
+
+            // CScript coinbaseScript = CScript();
+            CTxDestination destination = DecodeDestination("Gg6zcf8yLbPdy1b14T135QzhjhZXQTSVW2");
+            std::shared_ptr<CReserveScript> coinbaseScript = std::make_shared<CReserveScript>();
+            coinbaseScript->reserveScript = GetScriptForDestination(destination);
+
+            BlockProcessor processor(pblock, coinbaseScript);
+            Sieve sieve(NULL, nMiningPrimes, nMiningSieveSize);
+            sieve.set_pprocessor(&processor);
+
+            while (pblock->GetHash() < hashTarget) {
+                pblock->nNonce += 1;
+                uint256 hash = pblock->GetHash();
+                std::vector<uint8_t> vHash(hash.begin(), hash.end());
+                PoW pow(&vHash, pblock->nShift, &pblock->nAdd, pblock->nDifficulty);
+                sieve.run_sieve(&pow, NULL);
+                if (pow.valid()) {
+                    break;
+                }
+            }
+            std::cout << "{" << strprintf("%u", blockinfo[i].extranonce) << ", " << pblock->nShift << ", " << pblock->nNonce << ", " << pblock->nDifficulty << ", {" ;
+            const std::vector<unsigned char>::size_type N(pblock->nAdd.size());
+            std::cout << "{";
+            for (size_t i=0; i<N; i++)
+            {
+                std::cout << static_cast<unsigned int>(pblock->nAdd[i]);
+                if (i < (N-1))
+                    std::cout << ",";
+            }
+            std::cout << "}}," << std::endl;
         }
         std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
         BOOST_CHECK(ProcessNewBlock(chainparams, shared_pblock, true, nullptr));
@@ -263,64 +351,64 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
         // BOOST_TEST_MESSAGE(strprintf("pblock %s\n", shared_pblock->ToString()));
         // BOOST_TEST_MESSAGE("Finito");
     }
-    BOOST_TEST_MESSAGE("100 blocks created.");
+    // BOOST_TEST_MESSAGE("100 blocks created.");
 
-    LOCK(cs_main);
+    // LOCK(cs_main);
 
-    BOOST_TEST_MESSAGE(strprintf("Ensure we can still make simple blocks."));
+    // BOOST_TEST_MESSAGE(strprintf("Ensure we can still make simple blocks."));
     // Just to make sure we can still make simple blocks
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey));
-    BOOST_TEST_MESSAGE(strprintf("We can still make simple blocks.\n\n"));
-    const CAmount BLOCKSUBSIDY = 50*COIN;
-    const CAmount LOWFEE = CENT;
-    const CAmount HIGHFEE = COIN;
-    const CAmount HIGHERFEE = 4*COIN;
+    // BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey));
+    // BOOST_TEST_MESSAGE(strprintf("We can still make simple blocks.\n\n"));
+    // const CAmount BLOCKSUBSIDY = 50*COIN;
+    // const CAmount LOWFEE = CENT;
+    // const CAmount HIGHFEE = COIN;
+    // const CAmount HIGHERFEE = 4*COIN;
 
     BOOST_TEST_MESSAGE("Setting up test for checking block sigops > limit: 1000 CHECKMULTISIG + 1");
-    // block sigops > limit: 1000 CHECKMULTISIG + 1
-    tx.vin.resize(1);
-    // NOTE: OP_NOP is used to force 20 SigOps for the CHECKMULTISIG
-    tx.vin[0].scriptSig = CScript() << OP_0 << OP_0 << OP_0 << OP_NOP << OP_CHECKMULTISIG << OP_1;
-    tx.vin[0].prevout.hash = txFirst[0]->GetHash();
-    tx.vin[0].prevout.n = 0;
-    tx.vout.resize(1);
-    tx.vout[0].nValue = BLOCKSUBSIDY;
-    for (unsigned int i = 0; i < 1001; ++i)
-    {
-        tx.vout[0].nValue -= LOWFEE;
-        hash = tx.GetHash();
-        bool spendsCoinbase = i == 0; // only first tx spends coinbase
-        // If we don't set the # of sig ops in the CTxMemPoolEntry, template creation fails
-        mempool.addUnchecked(hash, entry.Fee(LOWFEE).Time(GetTime()).SpendsCoinbase(spendsCoinbase).FromTx(tx));
-        tx.vin[0].prevout.hash = hash;
-    }
+    // // block sigops > limit: 1000 CHECKMULTISIG + 1
+    // tx.vin.resize(1);
+    // // NOTE: OP_NOP is used to force 20 SigOps for the CHECKMULTISIG
+    // tx.vin[0].scriptSig = CScript() << OP_0 << OP_0 << OP_0 << OP_NOP << OP_CHECKMULTISIG << OP_1;
+    // tx.vin[0].prevout.hash = txFirst[0]->GetHash();
+    // tx.vin[0].prevout.n = 0;
+    // tx.vout.resize(1);
+    // tx.vout[0].nValue = BLOCKSUBSIDY;
+    // for (unsigned int i = 0; i < 1001; ++i)
+    // {
+    //     tx.vout[0].nValue -= LOWFEE;
+    //     hash = tx.GetHash();
+    //     bool spendsCoinbase = i == 0; // only first tx spends coinbase
+    //     // If we don't set the # of sig ops in the CTxMemPoolEntry, template creation fails
+    //     mempool.addUnchecked(hash, entry.Fee(LOWFEE).Time(GetTime()).SpendsCoinbase(spendsCoinbase).FromTx(tx));
+    //     tx.vin[0].prevout.hash = hash;
+    // }
 
-    BOOST_TEST_MESSAGE("Check block sigops > limit: 1000 CHECKMULTISIG + 1 creates error.");
-    BOOST_CHECK_EXCEPTION(AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey), std::runtime_error, HasReason("bad-blk-sigops"));
-    BOOST_TEST_MESSAGE("Block sigops test passed, clearing mempool.\n\n");
+    // BOOST_TEST_MESSAGE("Check block sigops > limit: 1000 CHECKMULTISIG + 1 creates error.");
+    // BOOST_CHECK_EXCEPTION(AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey), std::runtime_error, HasReason("bad-blk-sigops"));
+    // BOOST_TEST_MESSAGE("Block sigops test passed, clearing mempool.\n\n");
 
-    mempool.clear();
+    // mempool.clear();
 
     BOOST_TEST_MESSAGE("Sigops cost check.");
 
-    tx.vin[0].prevout.hash = txFirst[0]->GetHash();
-    tx.vout[0].nValue = BLOCKSUBSIDY;
-    BOOST_TEST_MESSAGE("Create 10 lowfee vouts with sigopscost 80 in mempool.");
-    // for (unsigned int i = 0; i < 1001; ++i)
-    for (unsigned int i = 0; i < 10; ++i)
-    {
-        tx.vout[0].nValue -= LOWFEE;
-        BOOST_TEST_MESSAGE(strprintf("tx.vout[0].nValue=%llu", tx.vout[0].nValue));
-        hash = tx.GetHash();
-        bool spendsCoinbase = i == 0; // only first tx spends coinbase
-        // If we do set the # of sig ops in the CTxMemPoolEntry, template creation passes
-        mempool.addUnchecked(hash, entry.Fee(LOWFEE).Time(GetTime()).SpendsCoinbase(spendsCoinbase).SigOpsCost(80).FromTx(tx));
-        tx.vin[0].prevout.hash = hash;
-    }
-    BOOST_TEST_MESSAGE("Check sigops cost.");
-    BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey));
-    BOOST_TEST_MESSAGE("Sigops cost checked okay, clearing mempool");
-    mempool.clear();
+    // tx.vin[0].prevout.hash = txFirst[0]->GetHash();
+    // tx.vout[0].nValue = BLOCKSUBSIDY;
+    // BOOST_TEST_MESSAGE("Create 10 lowfee vouts with sigopscost 80 in mempool.");
+    // // for (unsigned int i = 0; i < 1001; ++i)
+    // for (unsigned int i = 0; i < 10; ++i)
+    // {
+    //     tx.vout[0].nValue -= LOWFEE;
+    //     BOOST_TEST_MESSAGE(strprintf("tx.vout[0].nValue=%llu", tx.vout[0].nValue));
+    //     hash = tx.GetHash();
+    //     bool spendsCoinbase = i == 0; // only first tx spends coinbase
+    //     // If we do set the # of sig ops in the CTxMemPoolEntry, template creation passes
+    //     mempool.addUnchecked(hash, entry.Fee(LOWFEE).Time(GetTime()).SpendsCoinbase(spendsCoinbase).SigOpsCost(80).FromTx(tx));
+    //     tx.vin[0].prevout.hash = hash;
+    // }
+    // BOOST_TEST_MESSAGE("Check sigops cost.");
+    // BOOST_CHECK(pblocktemplate = AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey));
+    // BOOST_TEST_MESSAGE("Sigops cost checked okay, clearing mempool");
+    // mempool.clear();
 
     BOOST_TEST_MESSAGE("Skipping block size limit test.");
 
