@@ -132,9 +132,9 @@ BitcoinGUI::BitcoinGUI(const PlatformStyle *_platformStyle, const NetworkStyle *
 #endif // ENABLE_WALLET
     if(enableWallet)
     {
-        windowTitle += tr("Wallet");
+        windowTitle += tr("Wallet - Custom Wizz");
     } else {
-        windowTitle += tr("Node");
+        windowTitle += tr("Node - Custom Wizz");
     }
     windowTitle += " " + networkStyle->getTitleAddText();
 #ifndef Q_OS_MAC
