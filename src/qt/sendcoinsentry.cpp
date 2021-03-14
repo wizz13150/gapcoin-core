@@ -314,7 +314,7 @@ bool SendCoinsEntry::validate()
             std::regex str_expr ("(^ni.?://)(.*?)([/\\?]{1,})(.*)");
             std::smatch sm;
             std::regex_match(str, sm, str_expr);
-            if (sm.size() != 4) {
+            if (sm.size() != 5) {
                 QMessageBox::warning(this, tr("Unrecognised TrustyURI"),
                     tr("TrustyURI is not in recognised format of ni://example.org/sha-256;5AbXdpz5DcaYXCh9l3eI9ruBosiL5XDU3rxBbBaUO70"),
                     QMessageBox::Ok, QMessageBox::Ok);
@@ -351,10 +351,14 @@ bool SendCoinsEntry::validateInscription()
             std::regex str_expr ("(^ni.?://)(.*?)([/\\?]{1,})(.*)");
             std::smatch sm;
             std::regex_match(str, sm, str_expr);
-            if (sm.size() != 4)
+            if (sm.size() != 5) {
+                QMessageBox::warning(this, tr("Unrecognised TrustyURI"),
+                    tr("TrustyURI is not in recognised format of ni://example.org/sha-256;5AbXdpz5DcaYXCh9l3eI9ruBosiL5XDU3rxBbBaUO70"),
+                    QMessageBox::Ok, QMessageBox::Ok);
                 retval = false;
-
-            retval = true;
+            } else {
+                retval = true;
+            }
         }
 
         ui->inscriptionText->setValid(retval);
