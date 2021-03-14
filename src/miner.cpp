@@ -79,12 +79,12 @@ class BlockProcessor : public PoWProcessor {
     }
 
     bool process(PoW *pow) {
-      SetThreadPriority(THREAD_PRIORITY_NORMAL);
+      // SetThreadPriority(THREAD_PRIORITY_NORMAL);
 
       pow->get_adder(&pblock->nAdd);
       bool ret = CheckWork(pblock, coinbasescript);
 
-      SetThreadPriority(THREAD_PRIORITY_LOWEST);
+      // SetThreadPriority(THREAD_PRIORITY_LOWEST);
       return !ret;
     }
 
