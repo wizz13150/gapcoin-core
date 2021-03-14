@@ -61,10 +61,10 @@ MiningPage::MiningPage(const PlatformStyle *platformStyle, QWidget *parent) :
     ui->sliderGraphSampleTime->setMaximum(0);
     ui->sliderGraphSampleTime->setMaximum(6);
 
-    ui->sliderCores->setToolTip(tr("Use the slider to select the amount of CPU threads to use."));
-    ui->labelNetHashRate->setToolTip(tr("This shows the overall hashrate of the Gapcoin network."));
-    ui->labelMinerHashRate->setToolTip(tr("This shows the hashrate of your CPU whilst mining."));
-    ui->labelNextBlock->setToolTip(tr("This shows the average time between the blocks you have mined."));
+    ui->sliderCores->setToolTip(tr("Utilisez le slider pour sélectionner la quantité de threads du Processeur à utiliser."));
+    ui->labelNetHashRate->setToolTip(tr("Puissance de hashage totale du réseau Gapcoin."));
+    ui->labelMinerHashRate->setToolTip(tr("Puissance de hashage de votre Processeur en cours de minage."));
+    ui->labelNextBlock->setToolTip(tr("Estimation de la quantité moyenne de Gap que vous miner en 24 heures."));
 
     isMining = gArgs.GetBoolArg("-gen", false)? 1 : 0;
 
@@ -131,7 +131,7 @@ void MiningPage::updateUI(bool fGenerate)
         ui->pushSwitchMining->setEnabled(true);
      }
      else {
-        ui->pushSwitchMining->setToolTip(tr("Click 'Stop mining' to finish mining"));
+        ui->pushSwitchMining->setToolTip(tr("Cliquez sur 'Arrêter le minage' pour arrêter de miner"));
         ui->pushSwitchMining->setText(tr("Arrêter le minage"));
         ui->pushSwitchMining->setEnabled(true);
     }
