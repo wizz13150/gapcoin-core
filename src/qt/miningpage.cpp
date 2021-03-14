@@ -126,20 +126,20 @@ void MiningPage::updateUI(bool fGenerate)
     ui->labelNextBlock->setText(NextBlockTime);
 
     if (GUIUtil::GetHashRate() == 0) {
-        ui->pushSwitchMining->setToolTip(tr("Click 'Start mining' to begin mining."));
-        ui->pushSwitchMining->setText(tr("Start mining."));
+        ui->pushSwitchMining->setToolTip(tr("Cliquez sur 'Débuter le minage' pour commencer à miner"));
+        ui->pushSwitchMining->setText(tr("Débuter le minage"));
         ui->pushSwitchMining->setEnabled(true);
      }
      else {
-        ui->pushSwitchMining->setToolTip(tr("Click 'Stop mining' to finish mining."));
-        ui->pushSwitchMining->setText(tr("Stop mining."));
+        ui->pushSwitchMining->setToolTip(tr("Click 'Stop mining' to finish mining"));
+        ui->pushSwitchMining->setText(tr("Arrêter le minage"));
         ui->pushSwitchMining->setEnabled(true);
     }
     ui->pushSwitchMining->setEnabled(true);
 
-    QString status = QString("Not Mining Gapcoin");
+    QString status = QString("Minage de Gapcoin à l'arrêt");
     if (fGenerate)
-        status = QString("Mining with %1/%2 threads, shift: %3, sieve size: %4, number of primes in sieve: %5 - hashrate: %6 (%7 tests per sec.)")
+        status = QString("Minage avec %1/%2 threads, shift: %3, sieve size: %4, number of primes in sieve: %5 - hashrate: %6 (%7 tests par sec.)")
                 .arg((int)ui->sliderCores->value())
                 .arg(GUIUtil::MaxThreads())
                 .arg(nMiningShift).arg(nMiningSieveSize)
