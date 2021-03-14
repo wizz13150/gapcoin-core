@@ -46,6 +46,7 @@
 #include <memory>
 #include <mutex>
 #include <condition_variable>
+#include <iomanip>
 
 static PoWUtils *powUtils = new PoWUtils();
 
