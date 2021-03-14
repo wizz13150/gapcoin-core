@@ -70,9 +70,9 @@ MiningPage::MiningPage(const PlatformStyle *platformStyle, QWidget *parent) :
 
     QValidator *headershiftValuevalidator = new QIntValidator(14, 512, this);
     ui->headershiftValue->setValidator(headershiftValuevalidator);
-    QValidator *sievesizeValuevalidator = new QIntValidator(1000, 33554432, this);
+    QValidator *sievesizeValuevalidator = new QIntValidator(1000, 1533554432, this);
     ui->sievesizeValue->setValidator(sievesizeValuevalidator);
-    QValidator *sieveprimesValuevalidator = new QIntValidator(1000, 900000, this);
+    QValidator *sieveprimesValuevalidator = new QIntValidator(1000, 40900000, this);
     ui->sieveprimesValue->setValidator(sieveprimesValuevalidator);
 
     connect(ui->sliderCores, SIGNAL(valueChanged(int)), this, SLOT(changeNumberOfCores(int)));
