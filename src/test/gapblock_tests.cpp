@@ -268,7 +268,9 @@ void static GapcoinMiner()
 BOOST_AUTO_TEST_CASE(one)
 {
     BOOST_TEST_MESSAGE(strprintf("nMiningSieveSize=%s, nMiningPrimes=%s, nMiningShift=%s.", nMiningSieveSize, nMiningPrimes, nMiningShift));
+    /* FIXME: diabled, pro tem
     GapcoinMiner();
+    */
     BOOST_TEST_MESSAGE(strprintf("Done"));
 }
 
