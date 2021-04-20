@@ -307,19 +307,21 @@ UniValue setgenerate(const JSONRPCRequest& request)
             "\nArguments:\n"
             "1. generate         (boolean, required) Set to true to turn on generation, false to turn off.\n"
             "2. genproclimit     (numeric, optional) Set the processor limit for when generation is on. Can be -1 for unlimited.\n"
-            "3. sievesize        (numeric, optional) Sets the size of the prime sieve.\n"
-            "4. sieveprimes      (numeric, optional) Sets the amount of primes used in the sieve.\n"
-            "5. shift            (numeric, optional) Sets the header shift.\n"
+            "3. sievesize        (numeric, optional) Sets the size of the prime sieve (advised: 33554432).\n"
+            "4. sieveprimes      (numeric, optional) Sets the amount of primes used in the sieve (advised: 900000).\n"
+            "5. shift            (numeric, optional) Sets the header shift (advised: 25).\n"
             "                    Note: sieve size can only have 2^shift size.\n"
             "\nExamples:\n"
-            "\nSet the generation on with a limit of one processor\n"
+            "\nSet the generation on with a limit of one processor, default mining parameters\n"
             + HelpExampleCli("setgenerate", "true 1") +
-            "\nCheck the setting\n"
-            + HelpExampleCli("getgenerate", "") +
+            "\nSet the generation on with a limit of one processor, explicit mining parameters\n"
+            + HelpExampleCli("setgenerate", "true 1 33554432 900000 25") +
             "\nTurn off generation\n"
             + HelpExampleCli("setgenerate", "false") +
-            "\nUsing json rpc\n"
-            + HelpExampleRpc("setgenerate", "true, 1")
+            "\nUsing json rpc with default mining parameters\n"
+            + HelpExampleRpc("setgenerate", "true, 1") +
+            "\nUsing json rpc with explicit mining parameters\n"
+            + HelpExampleRpc("setgenerate", "true, 1, 33554432, 900000, 25")
         );
 
     if (Params().MineBlocksOnDemand())
@@ -371,8 +373,15 @@ UniValue setgenerate(const JSONRPCRequest& request)
     int numCores = GenerateGapcoins(fGenerate, nGenProcLimit, Params());
 
     nGenProcLimit = nGenProcLimit >= 0 ? nGenProcLimit : numCores;
-    std::string msg = std::to_string(nGenProcLimit) + " of " + std::to_string(numCores);
-    return msg;
+    std::string msg = "Mining with " + std::to_string(nGenProcLimit) + " of " + std::to_string(numCores) + " threads," + \
+            " sieve-size " + std::to_string(nMiningSieveSize) + \
+            " sieve-primes " + std::to_string(nMiningPrimes) + \
+            " shift " + std::to_string(nMiningShift);
+    if (fGenerate) {
+        return msg;
+    } else {
+        return "Not mining.";
+    }
 }
 
 
@@ -1373,7 +1382,7 @@ static const CRPCCommand commands[] =
     /* Coin generation */
     { "generating",         "getwork",                &getwork,                {"data"} },
     { "generating",         "getgenerate",            &getgenerate,            {}  },
-    { "generating",         "setgenerate",            &setgenerate,            {"generate", "genproclimit"}  },
+    { "generating",         "setgenerate",            &setgenerate,            {"generate", "genproclimit", "sievesize", "sieveprimes", "shift"}  },
 #endif
     { "generating",         "generatetoaddress",      &generatetoaddress,      {"nblocks","address","maxtries"} },
 
