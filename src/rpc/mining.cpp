@@ -307,32 +307,33 @@ UniValue setgenerate(const JSONRPCRequest& request)
             "\nArguments:\n"
             "1. generate         (boolean, required) Set to true to turn on generation, false to turn off.\n"
             "2. genproclimit     (numeric, optional) Set the processor limit for when generation is on. Can be -1 for unlimited.\n"
-            "3. sievesize        (numeric, optional) Sets the size of the prime sieve (advised: 33554432).\n"
+            "3. shift            (numeric, optional) Sets the header shift (advised: 25).\n"
             "4. sieveprimes      (numeric, optional) Sets the amount of primes used in the sieve (advised: 900000).\n"
-            "5. shift            (numeric, optional) Sets the header shift (advised: 25).\n"
+            "5. sievesize        (numeric, optional) Sets the size of the prime sieve (advised: 33554432).\n"
             "                    Note: sieve size can only have 2^shift size.\n"
             "\nExamples:\n"
             "\nSet the generation on with a limit of one processor, default mining parameters\n"
             + HelpExampleCli("setgenerate", "true 1") +
             "\nSet the generation on with a limit of one processor, explicit mining parameters\n"
-            + HelpExampleCli("setgenerate", "true 1 33554432 900000 25") +
+            + HelpExampleCli("setgenerate", "true 1 25 900000 33554432") +
             "\nTurn off generation\n"
             + HelpExampleCli("setgenerate", "false") +
             "\nUsing json rpc with default mining parameters\n"
             + HelpExampleRpc("setgenerate", "true, 1") +
             "\nUsing json rpc with explicit mining parameters\n"
-            + HelpExampleRpc("setgenerate", "true, 1, 33554432, 900000, 25")
+            + HelpExampleRpc("setgenerate", "true, 1, 25, 900000, 33554432")
         );
 
     if (Params().MineBlocksOnDemand())
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Use the generate method instead of setgenerate on this network");
 
-
     bool fGenerate = true;
+
     if (request.params.size() > 0)
         fGenerate = request.params[0].get_bool();
 
     int nGenProcLimit = gArgs.GetArg("-genproclimit", DEFAULT_GENERATE_THREADS);
+
     if (request.params.size() > 1)
     {
         nGenProcLimit = request.params[1].get_int();
@@ -342,25 +343,22 @@ UniValue setgenerate(const JSONRPCRequest& request)
 
     if (request.params.size() > 2)
     {
-        nMiningSieveSize = (request.params[2].get_int() < 1000) ? 1000 : request.params[2].get_int();
-
-        if (nMiningShift < 64 && nMiningSieveSize > (((uint64_t) 1) << nMiningShift))
-           nMiningSieveSize = (((uint64_t) 1) << nMiningShift);
+        if (request.params[2].get_int() < 14)
+            nMiningShift = 14;
+        else if (request.params[2].get_int() >= (1 << 16))
+            nMiningShift = (1 << 16) - 1;
+        else
+            nMiningShift = request.params[2].get_int();
     }
-
+    
     if (request.params.size() > 3)
     {
-        nMiningPrimes = (request.params[3].get_int() < 1000) ? 1000 : request.params[3].get_int();
+        nMiningPrimes = (request.params[3].get_int64() < 1000) ? 1000 : request.params[3].get_int64();
     }
 
     if (request.params.size() > 4)
     {
-        if (request.params[4].get_int() < 14)
-            nMiningShift = 14;
-        else if (request.params[4].get_int() >= (1 << 16))
-            nMiningShift = (1 << 16) - 1;
-        else
-            nMiningShift = request.params[4].get_int();
+        nMiningSieveSize = (request.params[4].get_int64() < 1000) ? 1000 : request.params[4].get_int64();
 
         if (nMiningShift < 64 && nMiningSieveSize > (((uint64_t) 1) << nMiningShift))
            nMiningSieveSize = (((uint64_t) 1) << nMiningShift);
@@ -374,9 +372,9 @@ UniValue setgenerate(const JSONRPCRequest& request)
 
     nGenProcLimit = nGenProcLimit >= 0 ? nGenProcLimit : numCores;
     std::string msg = "Mining with " + std::to_string(nGenProcLimit) + " of " + std::to_string(numCores) + " threads," + \
-            " sieve-size " + std::to_string(nMiningSieveSize) + \
+            " shift " + std::to_string(nMiningShift) + \
             " sieve-primes " + std::to_string(nMiningPrimes) + \
-            " shift " + std::to_string(nMiningShift);
+            " sieve-size " + std::to_string(nMiningSieveSize);
     if (fGenerate) {
         return msg;
     } else {
@@ -1382,7 +1380,7 @@ static const CRPCCommand commands[] =
     /* Coin generation */
     { "generating",         "getwork",                &getwork,                {"data"} },
     { "generating",         "getgenerate",            &getgenerate,            {}  },
-    { "generating",         "setgenerate",            &setgenerate,            {"generate", "genproclimit", "sievesize", "sieveprimes", "shift"}  },
+    { "generating",         "setgenerate",            &setgenerate,            {"generate", "genproclimit", "shift", "sieveprimes", "sievesize"}  },
 #endif
     { "generating",         "generatetoaddress",      &generatetoaddress,      {"nblocks","address","maxtries"} },
 
