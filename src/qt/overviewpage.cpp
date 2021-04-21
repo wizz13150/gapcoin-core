@@ -159,7 +159,9 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
         // give the axes some labels:
         ui->workplot->xAxis->setLabel("Last 7 days (4032 blocks)");
         ui->workplot->yAxis->setLabel("Difficulty");
+        ui->workplot->yAxis->setLabelColor(QColor(181, 0, 0));
         ui->workplot->yAxis2->setLabel("Hash rate");
+        ui->workplot->yAxis2->setLabelColor(QColor(0, 0, 181));
         ui->workplot->yAxis2->setVisible(true);
 
         // set axes label fonts:
@@ -185,16 +187,16 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
         // create graph
         ui->workplot->addGraph(ui->workplot->xAxis, ui->workplot->yAxis);
         // set the pens
-        ui->workplot->graph(0)->setPen(QPen(QColor(255, 165, 18)));
+        ui->workplot->graph(0)->setPen(QPen(QColor(181, 0, 0)));
         ui->workplot->graph(0)->setLineStyle(QCPGraph::lsNone);
-        ui->workplot->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, QColor(255, 165, 18), 1));
+        ui->workplot->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, QColor(181, 0, 0), 1));
 
         // create graph
         ui->workplot->addGraph(ui->workplot->xAxis, ui->workplot->yAxis2);
         // set the pens
-        ui->workplot->graph(1)->setPen(QPen(QColor(145, 137, 255)));
+        ui->workplot->graph(1)->setPen(QPen(QColor(0, 0, 181)));
         ui->workplot->graph(1)->setLineStyle(QCPGraph::lsNone);
-        ui->workplot->graph(1)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, QColor(145, 137, 255), 1));
+        ui->workplot->graph(1)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, QColor(0, 0, 181), 1));
 
     }
     else
