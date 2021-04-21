@@ -597,7 +597,7 @@ CWallet *GetFirstWallet() {
 
 void static GapcoinMiner(int nThread, int numThreads, const CChainParams& chainparams)
 {
-    LogPrintf("GapcoinMiner %s started\n", nThread);
+    LogPrintf("GapcoinMiner %s started, shift %s, sieve-primes %s, sieve-size %s\n", nThread, nMiningShift, nMiningPrimes, nMiningSieveSize);
     // SetThreadPriority(20); //THREAD_PRIORITY_LOWEST
     RenameThread(strprintf("gapcoin-miner %s", nThread).c_str());
 
