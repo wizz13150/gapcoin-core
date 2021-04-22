@@ -101,11 +101,11 @@ MiningPage::MiningPage(const PlatformStyle *platformStyle, QWidget *parent) :
 
     isMining = gArgs.GetBoolArg("-gen", false)? 1 : 0;
 
-    QValidator *headershiftValuevalidator = new QIntValidator(14, 512, this);
+    QIntValidator *headershiftValuevalidator = new QIntValidator(14, 512, this);
     ui->headershiftValue->setValidator(headershiftValuevalidator);
-    QValidator *sievesizeValuevalidator = new QIntValidator(1000, 33554432, this);
+    QIntValidator *sievesizeValuevalidator = new QIntValidator(1000, INT_MAX, this);
     ui->sievesizeValue->setValidator(sievesizeValuevalidator);
-    QValidator *sieveprimesValuevalidator = new QIntValidator(1000, 900000, this);
+    QIntValidator *sieveprimesValuevalidator = new QIntValidator(1000, INT_MAX, this);
     ui->sieveprimesValue->setValidator(sieveprimesValuevalidator);
 
     connect(ui->sliderCores, SIGNAL(valueChanged(int)), this, SLOT(changeNumberOfCores(int)));
@@ -113,7 +113,6 @@ MiningPage::MiningPage(const PlatformStyle *platformStyle, QWidget *parent) :
     connect(ui->pushSwitchMining, SIGNAL(clicked()), this, SLOT(switchMining()));
     connect(ui->pushButtonClearData, SIGNAL(clicked()), this, SLOT(clearHashRateData()));
     connect(ui->checkBoxShowGraph, SIGNAL(stateChanged(int)), this, SLOT(showHashRate(int)));
-    // connect(ui->headershiftValue, SIGNAL(textEdited(QString)), this, SLOT(shiftChanged()));
     connect(ui->headershiftValue, SIGNAL(editingFinished()), this, SLOT(shiftChanged()));
 
     ui->minerHashRateWidget->graphType = HashRateGraphWidget::GraphType::MINER_HASHRATE;
@@ -222,6 +221,8 @@ void MiningPage::StartMiner()
     nMiningShift = ui->headershiftValue->text().toInt();
     nMiningSieveSize = ui->sievesizeValue->text().toInt();
     nMiningPrimes = ui->sieveprimesValue->text().toInt();
+    if (nMiningShift < 64 && nMiningSieveSize > (((uint64_t) 1) << nMiningShift))
+       nMiningSieveSize = (((uint64_t) 1) << nMiningShift);
 
     GenerateGapcoins(true, nThreads, Params());
     isMining = true;
@@ -278,9 +279,12 @@ void MiningPage::timerEvent(QTimerEvent *)
 
 void MiningPage::updateSievePrimes(int i)
 {
-    sievesizeValue = pow(2, i);
-    qDebug() << "New header shift: " << QString("%1").arg(i) << ", new sieve size value: " << QString("%1").arg(sievesizeValue);
-    ui->sievesizeValue->setText(QString("%1").arg(sievesizeValue));
+    nMiningShift = i;
+    if (nMiningShift < 64 && nMiningSieveSize > (((uint64_t) 1) << nMiningShift)) {
+       nMiningSieveSize = (((uint64_t) 1) << nMiningShift);
+        qDebug() << "New header shift: " << QString("%1").arg(i) << ", new sieve size value: " << QString("%1").arg(nMiningSieveSize);
+        ui->sievesizeValue->setText(QString("%1").arg(nMiningSieveSize));
+    }
 }
 
 void MiningPage::shiftChanged()
@@ -291,6 +295,7 @@ void MiningPage::shiftChanged()
     int primedigits = shiftmap[shift-15];
     newshift = QString::number(primedigits);
     ui->primedigitValue->setText(QString("%1").arg(newshift));
+    updateSievePrimes(shift);
 }
 
 void MiningPage::showHashRate(int i)
