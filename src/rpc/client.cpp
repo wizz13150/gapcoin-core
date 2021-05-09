@@ -161,6 +161,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "checkprimegaplist", 1, "end" },
     { "getnetworkhashps", 0, "lookup"},
     { "getnetworkhashps", 1, "height"},
+    { "dumpbootstrap", 1, "end" },
+    { "dumpbootstrap", 2, "start" },
 };
 
 class CRPCConvertTable
