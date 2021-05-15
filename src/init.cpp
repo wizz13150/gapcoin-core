@@ -46,6 +46,7 @@
 #include <utilmoneystr.h>
 #include <validationinterface.h>
 #ifdef ENABLE_WALLET
+#include <rpc/mining.h>
 #include <wallet/init.h>
 #endif
 #include <warnings.h>
@@ -185,7 +186,7 @@ void Shutdown()
     /// module was initialized.
     RenameThread("gapcoin-shutoff");
     mempool.AddTransactionsUpdated(1);
-
+    ShutdownRPCMining();
     StopHTTPRPC();
     StopREST();
     StopRPC();
@@ -1758,6 +1759,7 @@ bool AppInitMain()
 
 #ifdef ENABLE_WALLET
     StartWallets(scheduler);
+    InitRPCMining();
 #endif
 
     return true;
