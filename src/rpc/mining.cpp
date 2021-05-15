@@ -334,8 +334,8 @@ UniValue setgenerate(const JSONRPCRequest& request)
     if (Params().MineBlocksOnDemand())
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Use the generate method instead of setgenerate on this network");
 
-    bool fGenerate = true;
 
+    bool fGenerate = true;
     if (request.params.size() > 0)
         fGenerate = request.params[0].get_bool();
 
@@ -357,7 +357,7 @@ UniValue setgenerate(const JSONRPCRequest& request)
         else
             nMiningShift = request.params[2].get_int();
     }
-    
+
     if (request.params.size() > 3)
     {
         nMiningPrimes = (request.params[3].get_int64() < 1000) ? 1000 : request.params[3].get_int64();
