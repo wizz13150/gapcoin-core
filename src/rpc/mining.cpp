@@ -44,16 +44,22 @@ extern uint64_t nHashesPerSec;
 #ifdef ENABLE_WALLET
 
 // Allocated in InitRPCMining, freed in ShutdownRPCMining
-/*
+
 static CReserveKey* pMiningKey = NULL;
+std::shared_ptr<CReserveScript> coinbaseScript = std::make_shared<CReserveScript>();
 
 void InitRPCMining()
 {
-    if (!pwalletMain)
+    if (vpwallets.empty())
         return;
 
     // getblocktemplate mining rewards paid here:
-    pMiningKey = new CReserveKey(pwalletMain);
+    pMiningKey = new CReserveKey(vpwallets[0]);
+    CPubKey pubkey;
+    pMiningKey->GetReservedKey(pubkey, true);
+    CTxDestination destination = GetDestinationForKey(pubkey, g_address_type);
+    coinbaseScript->reserveScript = GetScriptForDestination(destination);
+    GetMainSignals().ScriptForMining(coinbaseScript);
 }
 
 void ShutdownRPCMining()
@@ -63,8 +69,9 @@ void ShutdownRPCMining()
 
     delete pMiningKey;
     pMiningKey = NULL;
+    coinbaseScript.reset();
+    coinbaseScript = NULL;
 }
-*/
 
 #endif //ENABLE_WALLET
 
@@ -564,17 +571,8 @@ UniValue getwork(const JSONRPCRequest& request)
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
     static vector<std::unique_ptr<CBlockTemplate>> vNewBlockTemplate;
 
-    CReserveKey reservekey(pwallet);
-    CPubKey pubkey;
-    reservekey.GetReservedKey(pubkey, true);
-    CTxDestination destination = GetDestinationForKey(pubkey, g_address_type);
-    std::shared_ptr<CReserveScript> coinbaseScript = std::make_shared<CReserveScript>();
-    coinbaseScript->reserveScript = GetScriptForDestination(destination);
-
-
     if (request.params.size() == 0)
     {
-        GetMainSignals().ScriptForMining(coinbaseScript);
         
         // If the keypool is exhausted, no script is returned at all.  Catch this.
         if (!coinbaseScript)
