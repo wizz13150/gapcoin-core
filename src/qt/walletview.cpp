@@ -24,7 +24,6 @@
 
 #include <qt/blockexplorer.h>
 #include <qt/miningpage.h>
-#include <qt/recordspage.h>
 #include <qt/multisigdialog.h>
 #include <wallet/wallet.h>
 
@@ -208,14 +207,6 @@ void WalletView::gotoBlockExplorerPage()
 void WalletView::gotoMiningPage()
 {
     setCurrentWidget(miningPage);
-}
-
-void WalletView::gotoRecordsPage()
-{
-    RecordsPage *recordsPage = new RecordsPage(this);
-    recordsPage->setAttribute(Qt::WA_DeleteOnClose);
-    // recordsPage->setModel(walletModel);
-    recordsPage->show();
 }
 
 void WalletView::gotoReceiveCoinsPage()

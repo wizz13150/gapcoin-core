@@ -393,9 +393,6 @@ void BitcoinGUI::createActions()
     openBlockExplorerAction = new QAction(platformStyle->TextColorIcon(":/icons/explorer"), tr("&Blockchain"), this);
     openBlockExplorerAction->setStatusTip(tr("Block explorer window"));
 
-    openRecordsPageAction = new QAction(platformStyle->TextColorIcon(":/icons/news"), tr("&Record prime gaps"), this);
-    openRecordsPageAction->setStatusTip(tr("Details of Gapcoin-held record prime gaps"));
-
     openMultisigAction = new QAction(platformStyle->TextColorIcon(":/icons/multisig"), tr("&Multisig"), this);
     openMultisigAction->setStatusTip(tr("Multisig window"));
 
@@ -424,7 +421,6 @@ void BitcoinGUI::createActions()
         connect(usedSendingAddressesAction, SIGNAL(triggered()), walletFrame, SLOT(usedSendingAddresses()));
         connect(usedReceivingAddressesAction, SIGNAL(triggered()), walletFrame, SLOT(usedReceivingAddresses()));
         connect(openAction, SIGNAL(triggered()), this, SLOT(openClicked()));
-        connect(openRecordsPageAction, SIGNAL(triggered()), walletFrame, SLOT(gotoRecordsPage()));
         connect(openBlockExplorerAction, SIGNAL(triggered()), walletFrame, SLOT(gotoBlockExplorerPage()));
         connect(openMultisigAction, SIGNAL(triggered()), walletFrame, SLOT(gotoMultisigDialog()));
     }
@@ -474,7 +470,6 @@ void BitcoinGUI::createMenuBar()
         help->addAction(openRPCConsoleAction);
         help->addAction(openBlockExplorerAction);
         help->addAction(openMultisigAction);
-        help->addAction(openRecordsPageAction);
     }
     help->addAction(showHelpMessageAction);
     help->addSeparator();
@@ -604,7 +599,6 @@ void BitcoinGUI::setWalletActionsEnabled(bool enabled)
     usedReceivingAddressesAction->setEnabled(enabled);
     openAction->setEnabled(enabled);
     openBlockExplorerAction->setEnabled(enabled);
-    openRecordsPageAction->setEnabled(enabled);
     openMultisigAction->setEnabled(enabled);
 }
 
@@ -652,7 +646,6 @@ void BitcoinGUI::createTrayIconMenu()
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
     trayIconMenu->addAction(openBlockExplorerAction);
-    trayIconMenu->addAction(openRecordsPageAction);
     trayIconMenu->addAction(openMultisigAction);
 #ifndef Q_OS_MAC // This is built-in on Mac
     trayIconMenu->addSeparator();
@@ -745,11 +738,6 @@ void BitcoinGUI::gotoBlockExplorerPage()
 void BitcoinGUI::gotoMultisigDialog()
 {
     if (walletFrame) walletFrame->gotoMultisigDialog();
-}
-
-void BitcoinGUI::gotoRecordsPage()
-{
-    if (walletFrame) walletFrame->gotoRecordsPage();
 }
 
 void BitcoinGUI::gotoReceiveCoinsPage()

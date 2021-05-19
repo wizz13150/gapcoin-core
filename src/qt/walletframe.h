@@ -16,7 +16,6 @@ class SendCoinsRecipient;
 class WalletModel;
 class WalletView;
 class BlockExplorer;
-class RecordsPage;
 class MultisigDialog;
 
 QT_BEGIN_NAMESPACE
@@ -76,8 +75,6 @@ public Q_SLOTS:
     void gotoMiningPage();
     /** Switch to multisig dialog */
     void gotoMultisigDialog();
-    /** Switch to Records page */
-    void gotoRecordsPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */

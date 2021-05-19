@@ -556,6 +556,8 @@ UniValue getwork(const JSONRPCRequest& request)
             + HelpExampleRpc("getwork", "")
         );
 
+    LOCK(cs_main);
+
     CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
 
     if(!g_connman)

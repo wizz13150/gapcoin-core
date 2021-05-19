@@ -303,7 +303,7 @@ std::string BlockToString(CBlockIndex* pBlock)
         _("Gapstart"),    bnStart.ToString(),
         _("Gapend"),      bnEnd.ToString(),
         _("Gaplen"),      utostr(pow.gap_len()),
-        _("Merit"),       utostr(utils->get_readable_difficulty(pow.merit())),
+        _("Merit"),       strprintf("%.6f", utils->get_readable_difficulty(pow.merit())),
         _("Version"),     itostr(block.nVersion),
         _("Hash"),        "<pre>" + block.GetHash().GetHex() + "</pre>",
         _("Merkle Root"), "<pre>" + block.hashMerkleRoot.GetHex() + "</pre>",
