@@ -115,7 +115,6 @@ private:
     QAction *openAction;
     QAction *showHelpMessageAction;
     QAction *openBlockExplorerAction;
-    QAction *openRecordsPageAction;
     QAction *openMultisigAction;
 
     QSystemTrayIcon *trayIcon;
@@ -209,8 +208,6 @@ private Q_SLOTS:
     void gotoBlockExplorerPage(); 
     /** Switch to Multisig Dialog */
     void gotoMultisigDialog();
-    /** Switch to Records Page */
-    void gotoRecordsPage(); 
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */

@@ -146,13 +146,6 @@ void WalletFrame::gotoMultisigDialog()
         walletView->gotoMultisigDialog();
 }
 
-void WalletFrame::gotoRecordsPage()
-{
-    WalletView *walletView = currentWalletView();
-    if (walletView)
-        walletView->gotoRecordsPage();
-}
-
 void WalletFrame::gotoReceiveCoinsPage()
 {
     QMap<QString, WalletView*>::const_iterator i;

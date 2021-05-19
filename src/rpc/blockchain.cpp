@@ -2251,7 +2251,7 @@ UniValue checkprimegaplist(const JSONRPCRequest& request)
     if (request.fHelp || request.params.size() < 1 || request.params.size() > 2)
         throw std::runtime_error(
             "checkprimegaplist startheight endheight\n"
-            "\nReturns a list of formatted record gaps or improved merits appropriate for copying and\n"
+            "\nReturns a list of formatted record gaps or improved merits appropriate for copying and"
             "\npasting into Seth Troisi’s online submission service at https://primegaps.cloudygo.com/.\n"
             "\nArguments:\n"
             "1. startheight    (integer) First block number to check.\n"

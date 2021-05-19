@@ -84,8 +84,6 @@ public Q_SLOTS:
     void gotoMiningPage();
     /** Switch to Multisig Dialog */
     void gotoMultisigDialog();
-    /** Switch to Records page */
-    void gotoRecordsPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
