@@ -2020,7 +2020,7 @@ static std::map<int, float> getprimegaplist() {
     ssock.handshake(boost::asio::ssl::stream_base::handshake_type::client);
 
     std::stringstream request;
-    request << "GET /primegap-list-project/prime-gap-list/server/allgaps.sql HTTP/1.1\r\n";
+    request << "GET /primegap-list-project/prime-gap-list/master/allgaps.sql HTTP/1.1\r\n";
     request << "Host: raw.githubusercontent.com\r\n";
     request << "Accept-Encoding: *\r\n";
     request << "\r\n";
