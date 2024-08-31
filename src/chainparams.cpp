@@ -185,7 +185,7 @@ public:
         fRequireStandard = true;
 
         fMineBlocksOnDemand = false;
-        fMiningRequiresPeers = true;
+        fMiningRequiresPeers = false;
 
         // Blockchain is assumed valid before each of these.
         /**
